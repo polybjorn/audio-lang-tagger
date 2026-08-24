@@ -1,0 +1,25 @@
+# Smoke gate on the media runner (python label -> python:3.12). Stdlib-only
+# suite: the script imports and parses, formatters behave. Deploys go through
+# the dotfiles version pin, so a red run here flags a broken main before a
+# pin bump ships it to the fleet.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: python
+    steps:
+      # Manual checkout: actions/checkout is a Node action and the python
+      # image has no node. git is in the image.
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git init -q .
+          git fetch -q --depth 1 "${GITHUB_SERVER_URL/https:\/\//https:\/\/x-access-token:${TOKEN}@}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q FETCH_HEAD
+      - run: python3 -m unittest discover -s tests -v

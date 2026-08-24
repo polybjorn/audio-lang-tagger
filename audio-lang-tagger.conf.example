@@ -1,0 +1,31 @@
+# audio-lang-tagger configuration.
+# Copy to ~/.config/audio-lang-tagger.conf or /etc/audio-lang-tagger.conf.
+# CLI flags and AUDIO_LANG_TAGGER_* environment variables both win over this.
+
+# Library roots swept by --full and by a queue run's fallback. Colon-separated.
+MEDIA_DIRS=/srv/media/movies:/srv/media/series
+
+# Where the ledger, scan cache, skip list, queue and locks live. Must already
+# exist: a missing directory is treated as an unmounted volume, not a first run.
+# Defaults to $XDG_STATE_HOME/audio-lang-tagger when unset.
+STATE_DIR=/srv/media/.cleanup
+
+# Candidate queue written by an external library scanner. Defaults to
+# untagged_audio.json inside STATE_DIR.
+#QUEUE_FILE=/srv/media/.cleanup/untagged_audio.json
+
+# whisper.cpp model and binary. Both are searched for when unset.
+#MODEL=/var/lib/whisper/ggml-base.bin
+#WHISPER_BIN=/usr/bin/whisper-cli
+
+# How many times realtime this host transcribes, end-to-end. Sets the
+# whole-track scan budget and the 'f' key's estimate. Re-measure per host.
+#REALTIME=12
+
+# Sonarr/Radarr, used only as --auto corroboration. Reading config.xml needs no
+# setup when they run on this host; SONARR_URL + SONARR_API_KEY reach a remote
+# one instead.
+#SONARR_CONFIG=/var/lib/sonarr/config.xml
+#RADARR_CONFIG=/var/lib/radarr/config.xml
+#SONARR_URL=http://10.0.0.5:8989
+#SONARR_API_KEY=
