@@ -556,6 +556,34 @@ def arr_endpoint(url, api_key, config):
     return f"http://localhost:{port}", key
 
 
+def arr_probe(base_url, api_key):
+    """One-line connection verdict for --show-config: the arr's name and
+    version on success, otherwise what is wrong and which setting to check.
+    Nothing else in the tool reports a misconfigured arr - lookups degrade
+    silently by design - so this is where a bad URL or key becomes visible."""
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "-w", r"\n%{http_code}", "--max-time", "10",
+             "-H", f"X-Api-Key: {api_key}",
+             f"{base_url}/api/v3/system/status"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return "FAILED: no response (check the URL and that the arr is up)"
+    body, _, code = result.stdout.rpartition("\n")
+    if result.returncode != 0 or not code.isdigit() or code == "000":
+        return "FAILED: no response (check the URL and that the arr is up)"
+    if code == "401":
+        return "FAILED: 401 unauthorized (check the API key)"
+    if code != "200":
+        return f"FAILED: HTTP {code} (check the URL - is this the arr's base URL?)"
+    try:
+        status = json.loads(body)
+        return f"ok ({status.get('appName', 'arr')} {status.get('version', '?')})"
+    except json.JSONDecodeError:
+        return "FAILED: HTTP 200 but not an arr API (check the URL)"
+
+
 def build_expected_map():
     """{title_path: (iso2_code, 'Radarr'|'Sonarr', year, genres)} from the
     arr APIs.
@@ -2375,8 +2403,14 @@ def show_config():
         for label, url, key, config in (
                 ("sonarr", SONARR_URL, SONARR_API_KEY, SONARR_CONFIG),
                 ("radarr", RADARR_URL, RADARR_API_KEY, RADARR_CONFIG)):
-            base, _ = arr_endpoint(url, key, config)
-            print(f"{label}         {base or 'unavailable (' + config + ')'}")
+            base, api_key = arr_endpoint(url, key, config)
+            if not base:
+                print(f"{label}         unavailable ({config} unreadable and "
+                      f"no {label.upper()}_URL + {label.upper()}_API_KEY set)")
+                continue
+            # A resolved endpoint says nothing about whether the URL and key
+            # actually work, so probe: this is the tool's connection test.
+            print(f"{label}         {base}  ->  {arr_probe(base, api_key)}")
     else:
         print("sonarr/radarr  disabled (--no-arr)")
 

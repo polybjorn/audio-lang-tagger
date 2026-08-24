@@ -175,8 +175,25 @@ wins over the one config management writes.
 | `--no-arr` | - | arr lookup enabled |
 | `--jobs N` | - | `2` |
 
-`SONARR_URL` + `SONARR_API_KEY` (and the `RADARR_` pair) reach an arr on another
-host, instead of reading its `config.xml` locally.
+### Connecting Sonarr/Radarr
+
+Optional - without them the tool works fully interactively; they gate `--auto`
+(original-language corroboration, year, genres) and add an agree/disagree line
+to the card. Two ways in:
+
+- **Same host, native install:** automatic. The tool reads the arr's own
+  `config.xml` (default `/var/lib/sonarr/`, `/var/lib/radarr/`) and takes the
+  port and API key from there. Nothing to configure.
+- **Anything else - Docker, another host, non-standard paths:** set
+  `SONARR_URL` + `SONARR_API_KEY` (and the `RADARR_` pair). The API key is in
+  the arr's UI under Settings > General > Security. For Docker, the URL is
+  whatever you publish, e.g. `http://localhost:8989`.
+
+Verify with `--show-config`: it probes each configured arr and prints
+`ok (Sonarr 4.0.19.2979)` or what is wrong (unreachable, bad key, wrong URL).
+Check it once before relying on `--auto` - at runtime a failed arr lookup
+degrades silently to "no corroboration", which just means fewer tracks pass
+the auto gates and more reach the interactive card.
 
 `--realtime-factor` is how many times realtime this machine transcribes,
 end-to-end including the ffmpeg extract. It sets which tracks are short enough
