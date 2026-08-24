@@ -189,6 +189,15 @@ to the card. Two ways in:
   the arr's UI under Settings > General > Security. For Docker, the URL is
   whatever you publish, e.g. `http://localhost:8989`.
 
+Why only the arrs? Corroboration hinges on the title's *original language* -
+whisper hears "this is Italian", the arr knows "this film was made in
+Italian", and unattended tagging requires the two to agree independently.
+TMDB has that fact and the arrs pass it through their API. Jellyfin scrapes
+the same databases but does not store original language, and the Kodi NFO
+standard has no field for it either - so neither can stand in, and a
+corroboration source that only supplies year and genres would look like a
+safety check without being one.
+
 Verify with `--show-config`: it probes each configured arr and prints
 `ok (Sonarr 4.0.19.2979)` or what is wrong (unreachable, bad key, wrong URL).
 Check it once before relying on `--auto` - at runtime a failed arr lookup
