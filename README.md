@@ -13,16 +13,10 @@ audio with the confidence that everything left is identified.
 
 ## How a track gets tagged
 
-```mermaid
-flowchart TB
-  in["candidate queue or given PATHs<br>MKV tracks with missing/und language"] --> whisper["whisper.cpp scan<br>whole track when short, sampled windows when long<br>every result cached"]
-  whisper --> gate{"all auto<br>gates pass?"}
-  arr["Sonarr / Radarr"] -. "corroboration" .-> gate
-  gate -->|"yes"| tag["mkvpropedit writes the tag<br>header edit, no remux"]
-  gate -->|"no"| card["confirmation card<br>Enter=tag, or: code, deeper scan, skip, never ask"]
-  card -->|"tag"| tag
-  tag --> ledger["append-only ledger<br>every tag reversible"]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/pipeline-dark.svg">
+  <img src="docs/pipeline.svg" alt="Pipeline: untagged tracks are scanned by whisper.cpp, checked against the auto gates, and tagged by mkvpropedit; gate failures go to an interactive confirmation card; every tag lands in the ledger">
+</picture>
 
 ## Why it is not just "run whisper on everything"
 
@@ -133,11 +127,26 @@ and pruning the queue.
 
 ### Unattended tagging
 
-`--auto` tags without asking only when every gate passes: unanimous detections
-at p>=0.90 (or, on a whole-track pass, 0.90 on either the opening or the densest
-speech window), a coherent transcript, agreement with Sonarr/Radarr's original
-language, year >= 1940, no music/concert genre, a single non-commentary audio
-track, and a language outside the `no`/`nn`/`da`/`sv` cluster whisper confuses.
+`--auto` tags without asking only when every gate passes. The seven gates, and
+the constants at the top of the script that tune them - if your library needs
+different thresholds, that is where to change them:
+
+1. **Unanimous, confident detections** - every sampled window reports the same
+   language at p >= 0.90; a whole-track pass reaches 0.90 on either the opening
+   or the densest speech window (`AUTO_PROB`)
+2. **Coherent transcript** - enough alpha characters, enough words, enough
+   distinct vocabulary to rule out music hallucination (`AUTO_MIN_CHARS`,
+   `AUTO_MIN_WORDS`, `AUTO_MIN_UNIQUE`; long transcripts:
+   `AUTO_LONG_MIN_DISTINCT`, `AUTO_LONG_MIN_UNIQUE`)
+3. **Arr agreement** - Sonarr/Radarr's original language matches the detection;
+   no arr metadata means no auto-tagging at all
+4. **Year** - 1940 or later, using the episode's own air year where Sonarr
+   knows it (`AUTO_MIN_YEAR`; older content is sparse-dialogue territory)
+5. **Genre** - not music or concert (`AUTO_EXCLUDE_GENRES`)
+6. **One audio track** - a single non-commentary track in the file
+7. **Unambiguous language** - outside the `no`/`nn`/`da`/`sv` cluster whisper
+   confuses (`AUTO_EXCLUDE_ISO1`)
+
 "No speech found" never auto-tags anything.
 
 The intended shape for a large queue is `--prescan` in the background first
