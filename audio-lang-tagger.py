@@ -725,6 +725,35 @@ def find_whisper():
     return binary, model
 
 
+# Which package supplies each required binary, for the preflight message.
+TOOL_PACKAGES = {
+    "ffprobe": ("ffmpeg", "pacman -S ffmpeg / apt install ffmpeg / "
+                          "brew install ffmpeg"),
+    "ffmpeg": ("ffmpeg", "pacman -S ffmpeg / apt install ffmpeg / "
+                         "brew install ffmpeg"),
+    "mkvpropedit": ("mkvtoolnix", "pacman -S mkvtoolnix-cli / apt install "
+                                  "mkvtoolnix / brew install mkvtoolnix"),
+    "mkvmerge": ("mkvtoolnix", "pacman -S mkvtoolnix-cli / apt install "
+                               "mkvtoolnix / brew install mkvtoolnix"),
+    "mkvextract": ("mkvtoolnix", "pacman -S mkvtoolnix-cli / apt install "
+                                 "mkvtoolnix / brew install mkvtoolnix"),
+}
+
+
+def require_binaries(names):
+    """Exit with install help when any required binary is missing, so nobody
+    reaches their first Enter-to-tag only to hit a FileNotFoundError. Same
+    contract as find_whisper, which handles the whisper binary and model."""
+    missing = [n for n in names if not shutil.which(n)]
+    if not missing:
+        return
+    print(f"missing tools: {', '.join(missing)}")
+    for pkg, install in {TOOL_PACKAGES[n][0]: TOOL_PACKAGES[n][1]
+                         for n in missing}.items():
+        print(f"  {pkg}: {install}")
+    sys.exit(1)
+
+
 def probe(filepath):
     cmd = ["ffprobe", "-v", "quiet", "-print_format", "json",
            "-show_streams", "-show_format", str(filepath)]
@@ -3073,6 +3102,16 @@ def main():
             print("--bulk needs a tty to confirm "
                   "(over ssh: ssh -t HOST audio-lang-tagger.py --bulk ...)")
             sys.exit(1)
+
+    # Everything downstream assumes these exist; better one message now than
+    # a traceback at the first tag. --list only probes, --bulk never scans.
+    if args.list:
+        require_binaries(["ffprobe"])
+    elif args.bulk:
+        require_binaries(["ffprobe", "mkvpropedit", "mkvmerge", "mkvextract"])
+    else:
+        require_binaries(["ffprobe", "ffmpeg", "mkvpropedit", "mkvmerge",
+                          "mkvextract"])
 
     whisper_bin = model = None
     if not args.list and not args.bulk:  # a bulk run never scans
