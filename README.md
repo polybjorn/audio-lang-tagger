@@ -34,8 +34,7 @@ curl -L -o ~/.local/share/whisper/ggml-base.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 ```
 
-Get the script - it is one file, nothing else to install - and point it at
-some media:
+Get the script - it is one file - and point it at some media:
 
 ```bash
 curl -O https://raw.githubusercontent.com/polybjorn/audio-lang-tagger/main/audio-lang-tagger.py
@@ -43,9 +42,9 @@ chmod +x audio-lang-tagger.py
 ./audio-lang-tagger.py --list /path/to/your/media
 ```
 
-`--list` only reports - it tells you how many untagged tracks you have and
-changes nothing. When you are ready to tag, run the same command without
-`--list` and confirm each track as it comes up:
+`--list` changes nothing, it just reports how many untagged tracks you have.
+When you are ready to tag, run the same command without it and confirm each
+track as it comes up:
 
 ```bash
 ./audio-lang-tagger.py /path/to/your/media
@@ -167,9 +166,9 @@ read differently - watch `--auto` on your own content before trusting it.
 
 ### Unattended tagging
 
-`--auto` tags without asking only when every gate passes. The seven gates, and
-the constants at the top of the script that tune them - if your library needs
-different thresholds, that is where to change them:
+`--auto` tags without asking only when every gate passes. The constants that
+tune the seven are at the top of the script, which is where to go if your
+library needs different thresholds:
 
 1. **Unanimous, confident detections** - every sampled window reports the same
    language at p >= 0.90; a whole-track pass reaches 0.90 on either the opening
