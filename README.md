@@ -1,5 +1,7 @@
 # audio-lang-tagger
 
+[![CI](https://github.com/polybjorn/audio-lang-tagger/actions/workflows/ci.yml/badge.svg)](https://github.com/polybjorn/audio-lang-tagger/actions/workflows/ci.yml)
+
 Finds MKV audio tracks whose language flag is missing or `und`, guesses the
 language by running a short sample through [whisper.cpp][], and asks for
 confirmation before writing the tag with `mkvpropedit`.
@@ -35,11 +37,12 @@ curl -L -o ~/.local/share/whisper/ggml-base.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 ```
 
-Get the script and point it at some media:
+Get the script - it is one file, nothing else to install - and point it at
+some media:
 
 ```bash
-git clone https://github.com/polybjorn/audio-lang-tagger.git
-cd audio-lang-tagger
+curl -O https://raw.githubusercontent.com/polybjorn/audio-lang-tagger/main/audio-lang-tagger.py
+chmod +x audio-lang-tagger.py
 ./audio-lang-tagger.py --list /path/to/your/media
 ```
 
@@ -68,6 +71,7 @@ audio-lang-tagger.py --prescan        # unattended: scan + cache, never prompt
 audio-lang-tagger.py --bulk zxx PATH  # one code over a range you have judged
 audio-lang-tagger.py --plain          # line-mode prompts, no full-screen UI
 audio-lang-tagger.py --show-config    # print resolved paths and exit
+audio-lang-tagger.py --version        # print the version and exit
 ```
 
 Interactive modes need a tty. Over ssh that means `ssh -t HOST
@@ -122,22 +126,19 @@ Check it once before relying on `--auto` - at runtime a failed arr lookup
 degrades silently to "no corroboration", which just means fewer tracks pass
 the auto gates and more reach the interactive card.
 
-Why only the arrs? Corroboration hinges on the title's *original language* -
+Why only the arrs? Corroboration hinges on the title's *original language*:
 whisper hears "this is Italian", the arr knows "this film was made in
 Italian", and unattended tagging requires the two to agree independently.
-TMDB has that fact and the arrs pass it through their API. Jellyfin scrapes
-the same databases but does not store original language, and the Kodi NFO
-standard has no field for it either - so neither can stand in, and a
-corroboration source that only supplies year and genres would look like a
-safety check without being one.
+Jellyfin and the Kodi NFO standard do not store that fact, so neither can
+stand in - year and genres alone would look like a safety check without
+being one.
 
 ## How it decides
 
 Language detection off a 30-second sample is wrong often enough that blind
 tagging is not usable, and it is wrong in a specific way: whisper's language
-head fires confidently on music. A cartoon that opens on a title score detects
-at p=0.42 while transcribing 99 clean words later in the same track, and a
-sung-through short "transcribes" a 219-word `La la la` loop at p=0.86.
+head fires confidently on music: a sung-through short "transcribes" a
+219-word `La la la` loop at p=0.86.
 
 So the tool separates the two questions. *Are there words here* is answered from
 the transcript (character count, word count, distinct-word ratio), and *which
@@ -158,8 +159,9 @@ confirmation cheap:
 - Every applied tag is appended to a TSV ledger (`old value` is always `und`),
   so any batch or misclick is enumerable and reversible.
 
-The `base` model is what every threshold was calibrated against. A larger one
-will read differently; re-check the gates before trusting `--auto` with it.
+The `base` model on a 6-core CPU is what every threshold was calibrated
+against. A larger model, or a library unlike the one it was tuned on, will
+read differently - watch `--auto` on your own content before trusting it.
 
 ### Unattended tagging
 
@@ -299,9 +301,11 @@ still not safe is both runs reaching the same file.
 <details>
 <summary><b>Tests</b></summary>
 
-Stdlib only, no framework, run from repo root:
+Stdlib only, no framework. Clone the repo and run from its root:
 
 ```
+git clone https://github.com/polybjorn/audio-lang-tagger.git
+cd audio-lang-tagger
 python3 -m unittest discover -s tests
 ```
 
@@ -310,14 +314,8 @@ formatters behave. CI runs the same suite on every push.
 
 </details>
 
-## Project status
+## Scope
 
-This is a personal tool, published because the niche is empty. It runs weekly
-on one library, and every threshold in the auto gates was calibrated against
-the `base` model on a 6-core CPU - treat `--auto` sceptically until you have
-watched it on your own content. Bug reports with a `--version` and a ledger
-row are welcome; large features may be declined to keep the tool small.
-
-## License
-
-MIT - see [LICENSE](LICENSE).
+A personal tool, published because the niche is empty, and running weekly on
+one library. Bug reports with a `--version` and a ledger row are welcome;
+large features may be declined to keep the tool small.
