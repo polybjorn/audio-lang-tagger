@@ -1,17 +1,18 @@
 # audio-lang-tagger
 
-[![CI](https://github.com/polybjorn/audio-lang-tagger/actions/workflows/ci.yml/badge.svg)](https://github.com/polybjorn/audio-lang-tagger/actions/workflows/ci.yml)
-
 Finds MKV audio tracks whose language flag is missing or `und`, guesses the
 language by running a short sample through [whisper.cpp][], and asks for
 confirmation before writing the tag with `mkvpropedit`.
 
 The edit is a track-header change, not a remux: nothing is re-encoded, no data
 is copied, and a 40 GB file is tagged in well under a second. Media servers stop
-labelling those tracks "Unknown", and a library-cleanup pass can strip unwanted
-audio with the confidence that everything left is identified.
+labelling those tracks "Unknown", and a cleanup pass can finally act on them:
+track strippers like [radarr-striptracks][striptracks] have to keep every `und`
+track, because removing one blind risks leaving a file with no audio at all.
+Identify them and that pass can decide.
 
 [whisper.cpp]: https://github.com/ggerganov/whisper.cpp
+[striptracks]: https://github.com/TheCaptain989/radarr-striptracks
 
 ![The interactive card: a progress header, the track's codec, runtime and size, whisper's verdict with the words behind it, the detector reading, Sonarr's agreement, a line of what was heard, and the single-key choices along the bottom](docs/ui.svg)
 
