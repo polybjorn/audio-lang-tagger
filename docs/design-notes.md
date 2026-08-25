@@ -1,20 +1,19 @@
 # Design notes
 
-Why the tool asks before it tags, why the auto gates are shaped the way they
-are, and what was measured to settle each one. None of this is needed to run
-the tool - the [README](../README.md) is the whole operating manual. This is
-for anyone deciding whether to trust `--auto`, or changing a threshold and
-wanting to know what it was protecting against.
+Why the tool asks before it tags, and what was measured to settle each gate.
+None of this is needed to run it - the [README](../README.md) is the operating
+manual. Read this if you are deciding whether to trust `--auto`, or changing a
+threshold and want to know what it was protecting against.
 
-The constants themselves live at the top of `audio-lang-tagger.py`, and the
-module docstring is the authority for their current values. Numbers here are
-the evidence behind them.
+The constants live at the top of `audio-lang-tagger.py`, and its module
+docstring is the authority for their current values. The numbers here are the
+evidence behind them.
 
 ## Detection is wrong in a specific way
 
 Whisper only ever detects language from 30 seconds of audio, and its language
-head fires confidently on music. That is not random error, it is a systematic
-one, and it is what makes blind tagging unusable:
+head fires confidently on music. That is not random error but a systematic one,
+and it is what makes blind tagging unusable:
 
 - A sung-through 1956 short "transcribes" a 219-word `La la la` loop and the
   detector reports it at p=0.86. High confidence, no language content.
@@ -23,7 +22,7 @@ one, and it is what makes blind tagging unusable:
   confidence, real language content.
 
 A single confidence number cannot separate those two, because they fail in
-opposite directions. So the tool stops treating detection as one question.
+opposite directions.
 
 ## Two questions, two sources of evidence
 
@@ -55,10 +54,10 @@ better of the two readings. All 8 shorts then cleared 0.90, while the 1956
 sung-through case (43 distinct words inside 425) stayed at 0.81 and is rejected
 by the coherence floor as well.
 
-The card uses the same pair of readings once more, and this part never touches
-the auto gates: a degenerate transcript whose better reading still clears 0.90
-is presented as that language rather than `zxx`, because music does not reach
-that bar. It is sparse real speech buried in repetition padding, and the human
+The card uses the same pair of readings once more, without touching the auto
+gates: a degenerate transcript whose better reading still clears 0.90 is
+presented as that language rather than `zxx`, because music does not reach that
+bar. It is sparse real speech buried in repetition padding, and the human
 decides.
 
 ## Why only Sonarr and Radarr corroborate
@@ -92,7 +91,7 @@ more reach the human.
   independent evidence.
 - **`zxx` is checked more suspiciously than any language code**, in `--bulk`
   and on the card alike, because it claims absence. Twenty distinct words
-  anywhere in the track is enough to hand the file back to the human, where
+  anywhere in the track is enough to hand the file back to the human, while
   claiming one language over another asks for a full coherent transcript first.
 
 ## Measured numbers
@@ -102,12 +101,9 @@ threshold was calibrated against. A larger model reads differently and the
 gates should be re-checked before it is trusted with `--auto`.
 
 - Transcription runs 10.5-15x realtime end to end, including the ffmpeg
-  extract. `--realtime-factor` defaults to 12, the middle of that range, and it
-  decides which tracks are short enough to scan whole and what the `f` key
-  estimates. Nothing else reads it.
-- The scan cache turns a 34s cold scan into 1s warm, and the first card
-  arrives in 0.5s instead of 34s. Cache keys are path plus mtime plus track, so
-  a retagged or replaced file can never be served a stale entry.
-- `--jobs 2` was the best of 1, 2, 3 and 6, and it is only 1.28x one job.
-  Whisper already parallelises internally and the work is memory-bandwidth
-  bound, so raising it further buys nothing.
+  extract. `--realtime-factor` defaults to 12, the middle of that range.
+- A cold scan takes 34s; warm from the cache it is 1s, and the first card
+  arrives in 0.5s. Cache keys are path plus mtime plus track, so a retagged or
+  replaced file can never be served a stale entry.
+- `--jobs 2` was the best of 1, 2, 3 and 6, and only 1.28x one job: whisper
+  already parallelises internally and the work is memory-bandwidth bound.
