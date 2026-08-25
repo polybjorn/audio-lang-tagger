@@ -29,3 +29,7 @@ STATE_DIR=/srv/media/.cleanup
 #RADARR_CONFIG=/var/lib/radarr/config.xml
 #SONARR_URL=http://10.0.0.5:8989
 #SONARR_API_KEY=
+
+# Extra paths to skip, colon-separated, on top of the built-in
+# trailer/sample/Extras rules. Plain case-insensitive substrings.
+#IGNORE=/kids/:-behindthescenes

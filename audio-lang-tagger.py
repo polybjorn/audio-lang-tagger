@@ -31,6 +31,8 @@ Usage (interactive modes need a tty; over ssh use `ssh -t HOST ...`):
   audio-lang-tagger.py PATH [PATH...]   # limit to given files/dirs
   audio-lang-tagger.py --list           # report untagged tracks, no prompts
   audio-lang-tagger.py --bulk CODE PATH # one code over a judged range
+  audio-lang-tagger.py --ledger [N]     # review the last N applied tags
+  audio-lang-tagger.py --undo N         # revert the last N tags to und
 
 Configuration comes from CLI flags, then AUDIO_LANG_TAGGER_* environment
 variables, then ~/.config/audio-lang-tagger.conf, then
@@ -85,6 +87,21 @@ claims absence: 20 distinct words anywhere in the track is enough to hand the
 file to the human, where claiming one language over another asks for a full
 coherent transcript first.
 Each file lands in the ledger as its own und->code row with mode 'bulk'.
+
+Sweeps and queue runs leave out trailers, samples and extras folders, matched
+by the naming conventions Plex/Emby/Jellyfin share (a stem suffixed -trailer or
+-sample, or a parent folder named Extras/Featurettes/Behind The Scenes/...) -
+not by substring, which would eat "Trailer Park Boys". IGNORE adds plain
+substrings on top, --no-ignore turns it off, and a file named explicitly on the
+command line is never filtered. What a run left out is reported at startup.
+
+The ledger is readable as well as written: --ledger prints its tail with the
+mode and probability behind each decision, which is how an --auto run gets
+reviewed after the fact, and --undo N reverts the last N tags that are still in
+force after one confirmation. "Still in force" is computed by replaying the
+ledger per track, so a reverted row cannot be reverted twice and a re-tag after
+an undo counts at its latest value. A track whose header no longer matches what
+the ledger recorded is skipped and reported rather than overwritten.
 
 The default run reads a candidate queue an external library scanner saved (so
 it starts prompting in seconds instead of re-probing the library) and
@@ -198,7 +215,7 @@ import threading
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-__version__ = "1.7.1"
+__version__ = "1.8.0"
 
 # ── Runtime configuration ───────────────────────────────────────────────────
 # Every path below is resolved by configure() before any work starts, from
@@ -289,6 +306,23 @@ AUTO_EXCLUDE_ISO1 = {"no", "nn", "da", "sv"}  # whisper flips within cluster
 # distinct) and the 1956 sung-through short (43) go to the human while the loops and the
 # silent tracks pass through. Roughly 40% of the pre-1940 shorts land above it.
 BULK_ZXX_MIN_DISTINCT = 20
+# Extras a library keeps beside the feature. Plex, Emby and Jellyfin all name
+# them either by folder or by a suffix on the stem, so matching those two
+# conventions skips them without touching a title that merely contains the
+# word: "Trailer Park Boys - S01E01.mkv" is neither in a Trailers/ folder nor
+# suffixed -trailer, and survives. Substring matching on the whole path would
+# eat it. IGNORE adds patterns for the conventions a library invented itself,
+# and those ARE plain substrings, because the user knows what they wrote.
+IGNORE_DIR_NAMES = {"extras", "featurettes", "behind the scenes",
+                    "deleted scenes", "interviews", "scenes", "shorts",
+                    "trailers", "other"}
+IGNORE_STEM_SUFFIXES = ("-trailer", "-sample", "-featurette", "-clip",
+                        "-behindthescenes", "-deleted", "-deletedscene",
+                        "-interview", "-scene", "-short", "-other")
+IGNORE_STEMS = {"sample", "trailer"}
+IGNORE_EXTRA = []       # user patterns from --ignore / IGNORE
+USE_IGNORE = True       # --no-ignore turns the whole filter off
+IGNORED_COUNT = 0       # what the current run's sweep left out, for reporting
 # Measured on a 6-core Alder Lake box (base model, CPU backend): transcription
 # alone runs 16-21x realtime, but end-to-end with the ffmpeg extract it is
 # 10.5-15x (music-heavy tracks sit at the low end, since failed decodes retry
@@ -1317,6 +1351,155 @@ def record_tag(filepath, audio_pos, code, mode, analysis=None, old="und"):
         f.write(line + "\n")
 
 
+def shown_path(path):
+    """Path as the cards show it, relative to the library root when it sits
+    under one."""
+    p = Path(path)
+    if DISPLAY_ROOT:
+        try:
+            return str(p.relative_to(DISPLAY_ROOT))
+        except ValueError:
+            pass
+    return str(p)
+
+
+def read_ledger():
+    """Every ledger row, oldest first, as dicts. Rows the tool did not write
+    (a truncated line, a hand-edited file) are skipped rather than fatal: the
+    ledger is an audit trail, and refusing to read all of it because one line
+    is malformed would be the wrong failure."""
+    rows = []
+    try:
+        with open(TAG_LOG_FILE) as f:
+            for line in f:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) < 5:
+                    continue
+                change = parts[3]
+                if "->" not in change:
+                    continue
+                old, _, new = change.partition("->")
+                track = parts[2].lstrip("a")
+                if not track.isdigit():
+                    continue
+                rows.append({
+                    "when": parts[0], "path": parts[1], "track": int(track),
+                    "old": old, "new": new, "mode": parts[4],
+                    "prob": parts[5] if len(parts) > 5 else "-",
+                    "chars": parts[6] if len(parts) > 6 else "-",
+                })
+    except OSError:
+        return []
+    return rows
+
+
+def ledger_in_force(rows):
+    """The rows whose edit is still on disk, newest first.
+
+    An undo appends a corrective row rather than editing history, so the
+    ledger read forward is a sequence of states per track and only the last
+    one is true. Anything reverted, or re-tagged since, drops out - which is
+    what makes this safe to drive --undo from."""
+    current = {}
+    for row in rows:
+        key = (row["path"], row["track"])
+        current[key] = None if row["mode"] == "undo" else row
+    live = [r for r in current.values() if r is not None]
+    return sorted(live, key=lambda r: r["when"], reverse=True)
+
+
+def show_ledger(limit):
+    """Print the tail of the ledger. The point is reviewing what --auto did
+    unsupervised, so mode and the probability behind each decision get their
+    own columns."""
+    rows = read_ledger()
+    if not rows:
+        print(dim(f"No tags recorded yet ({TAG_LOG_FILE})."))
+        return
+    by_mode = {}
+    for row in rows:
+        by_mode[row["mode"]] = by_mode.get(row["mode"], 0) + 1
+    tally = "  ".join(f"{mode} {num(n)}" for mode, n in sorted(by_mode.items()))
+    print(f"Ledger       {num(len(rows))} rows   {tally}")
+    print(dim(f"             {TAG_LOG_FILE}"))
+    print()
+    for row in rows[-limit:]:
+        # Pad before colouring: an escape sequence counts toward a format
+        # width and would knock every row out of line once colour is on.
+        code = f"{row['old']}->{row['new']}".ljust(11)
+        prob = (f"p{row['prob']}" if row["prob"] != "-" else "").ljust(7)
+        colour = green if row["mode"] != "undo" else yellow
+        print(ellipsize(
+            f"  {dim(row['when'].replace('T', ' '))}  {colour(bold(code))}"
+            f" {row['mode']:<6} {dim(prob)}"
+            f" a{row['track']}  {shown_path(row['path'])}", reserve=1))
+    if len(rows) > limit:
+        print()
+        print(dim(f"             {len(rows) - limit} older rows not shown "
+                  f"(--ledger {len(rows)} for all)"))
+
+
+def undo_tags(count):
+    """Revert the last N tags that are still in force, one confirmation for
+    the batch. Each revert is itself a ledger row, so an undo of an undo is
+    just the next row rather than a hole in the history."""
+    live = ledger_in_force(read_ledger())
+    if not live:
+        print(dim("Nothing to undo: no tag in the ledger is still in force."))
+        return 0
+    batch = live[:count]
+    print(f"About to revert {plural(len(batch), 'tag')} to und:")
+    print()
+    for row in batch:
+        print(ellipsize(f"  {dim(row['when'].replace('T', ' '))}  "
+                        f"{bold(row['new'])}  {row['mode']:<6} "
+                        f"a{row['track']}  {shown_path(row['path'])}",
+                        reserve=1))
+    print()
+    if not sys.stdin.isatty():
+        print(red("--undo needs a tty to confirm. Over ssh use ssh -t."))
+        return 1
+    try:
+        answer = input(f"Revert {plural(len(batch), 'tag')}? [y/N] ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 1
+    if answer.strip().lower() not in ("y", "yes"):
+        print(dim("Nothing changed."))
+        return 0
+    done = failed = 0
+    for row in batch:
+        path = Path(row["path"])
+        if not path.is_file():
+            print(red(f"  missing, skipped: {shown_path(path)}"))
+            failed += 1
+            continue
+        # The ledger says what this tool wrote, not what the file says now.
+        # Anything that moved the header since (another tool, a replaced
+        # file) is not ours to revert.
+        langs = header_audio_langs(path)
+        if langs is None or langs.get(row["track"], "") != row["new"]:
+            now = "unreadable" if langs is None else (
+                langs.get(row["track"], "") or "empty")
+            print(yellow(f"  track now reads '{now}', not '{row['new']}' - "
+                         f"skipped: {shown_path(path)}"))
+            failed += 1
+            continue
+        ok, msg = apply_tag(path, row["track"], row["old"])
+        if not ok:
+            print(red(f"  failed: {shown_path(path)}: {msg}"))
+            failed += 1
+            continue
+        record_tag(path, row["track"], row["old"], "undo", old=row["new"])
+        done += 1
+    print()
+    print(green(f"Reverted {plural(done, 'tag')}.")
+          + (red(f"  {failed} skipped.") if failed else ""))
+    # The edits moved every mtime, so the cached scans for these files can no
+    # longer be served and the tracks come back as candidates on the next run.
+    return 0
+
+
 def _clean_env():
     """Environment with a valid locale. ssh from macOS forwards LC_CTYPE=UTF-8,
     which is not a valid locale on Linux and crashes mkvtoolnix's C++ runtime."""
@@ -1783,6 +1966,33 @@ def prune_worklist(touched, skips, applied):
             pass
 
 
+def is_ignored(path):
+    """True for a trailer, sample or other extra, by the naming conventions
+    the media servers share (see IGNORE_DIR_NAMES). Never applied to a file
+    named on the command line: asking for a path is asking for that path."""
+    if not USE_IGNORE:
+        return False
+    p = Path(path)
+    stem = p.stem.lower()
+    if stem in IGNORE_STEMS or stem.endswith(IGNORE_STEM_SUFFIXES):
+        return True
+    if any(part.lower() in IGNORE_DIR_NAMES for part in p.parent.parts):
+        return True
+    low = str(p).lower()
+    return any(pat in low for pat in IGNORE_EXTRA)
+
+
+def drop_ignored(files):
+    """Filter a swept or queued worklist, counting what went. The count is
+    reported at startup rather than swallowed: a filter nobody can see is how
+    a file silently stops being tagged."""
+    global IGNORED_COUNT
+    files = list(files)
+    kept = [f for f in files if not is_ignored(f)]
+    IGNORED_COUNT += len(files) - len(kept)
+    return kept
+
+
 def find_mkv_files(paths):
     files = []
     for p in paths:
@@ -1790,7 +2000,7 @@ def find_mkv_files(paths):
         if p.is_file() and p.suffix.lower() == ".mkv":
             files.append(p)
         elif p.is_dir():
-            files.extend(p.rglob("*.mkv"))
+            files.extend(drop_ignored(p.rglob("*.mkv")))
     return sorted(files)
 
 
@@ -1811,7 +2021,7 @@ def load_worklist():
     if not isinstance(paths, list) or not paths:
         return None, st
     files = sorted(Path(p) for p in paths)
-    return [p for p in files if p.is_file()], st
+    return drop_ignored([p for p in files if p.is_file()]), st
 
 
 def probe_candidates(filepath, skips):
@@ -2333,6 +2543,7 @@ def configure(args):
     global MODEL_PATHS, WHISPER_BIN_OVERRIDE, WHISPER_REALTIME
     global FULL_SCAN_MAX_SECONDS, SONARR_CONFIG, RADARR_CONFIG
     global SONARR_URL, SONARR_API_KEY, RADARR_URL, RADARR_API_KEY, USE_ARR
+    global IGNORE_EXTRA, USE_IGNORE
     conf = read_config_files()
 
     dirs = args.media_dir
@@ -2383,6 +2594,13 @@ def configure(args):
                       or conf.get("RADARR_API_KEY"))
     USE_ARR = not args.no_arr
 
+    USE_IGNORE = not args.no_ignore
+    extra = args.ignore
+    if not extra:
+        raw = setting("IGNORE", None, conf)
+        extra = [x for x in raw.split(os.pathsep) if x] if raw else []
+    IGNORE_EXTRA = [x.strip().lower() for x in extra if x.strip()]
+
     # An explicitly configured state dir is usually on the media mount, where a
     # missing directory means the mount is gone rather than a first run - so
     # creating it silently would scatter state across an empty mountpoint. The
@@ -2421,6 +2639,12 @@ def show_config():
     print(f"scan cache     {SCAN_CACHE_FILE}")
     print(f"skip list      {SKIP_FILE}")
     print(f"display root   {DISPLAY_ROOT or '(none, full paths shown)'}")
+    if not USE_IGNORE:
+        print("ignore         off (--no-ignore): trailers and extras included")
+    else:
+        extra = (", plus " + ", ".join(IGNORE_EXTRA)) if IGNORE_EXTRA else ""
+        print(f"ignore         trailers, samples, {len(IGNORE_DIR_NAMES)} "
+              f"extras folders{extra}")
     binary = WHISPER_BIN_OVERRIDE or next(
         (shutil.which(b) for b in WHISPER_BINS if shutil.which(b)), None)
     print(f"whisper bin    {binary or 'not found on PATH'}")
@@ -3019,6 +3243,16 @@ def main():
                              "benchmarked best on a 6-core box, only ~1.28x "
                              "over one job since whisper parallelises "
                              "internally)")
+    parser.add_argument("--ledger", nargs="?", type=int, const=20,
+                        metavar="N",
+                        help="print the last N applied tags (default 20) and "
+                             "exit. The mode and probability columns are how "
+                             "you review what --auto did unsupervised.")
+    parser.add_argument("--undo", type=int, metavar="N",
+                        help="revert the last N tags that are still in force "
+                             "back to und, after one confirmation. Skips any "
+                             "track whose header no longer matches what the "
+                             "ledger says this tool wrote.")
     parser.add_argument("--plain", action="store_true",
                         help="line-mode prompts instead of the full-screen "
                              "interface (also the automatic fallback when "
@@ -3064,6 +3298,12 @@ def main():
     cfg.add_argument("--no-arr", action="store_true",
                      help="skip the Sonarr/Radarr lookup entirely. --auto then "
                           "tags nothing, since arr agreement is a gate")
+    cfg.add_argument("--ignore", action="append", metavar="PATTERN",
+                     help="skip paths containing this text, repeatable, on "
+                          "top of the built-in trailer/sample/Extras rules. "
+                          f"Env/config: IGNORE, '{os.pathsep}'-separated")
+    cfg.add_argument("--no-ignore", action="store_true",
+                     help="scan trailers, samples and Extras/ too")
     cfg.add_argument("--show-config", action="store_true",
                      help="print the resolved configuration and exit")
 
@@ -3072,6 +3312,14 @@ def main():
     if args.show_config:
         show_config()
         return
+    if args.ledger is not None:
+        show_ledger(max(1, args.ledger))
+        return
+    if args.undo is not None:
+        if args.undo < 1:
+            print("ERROR: --undo takes a count of 1 or more")
+            sys.exit(1)
+        sys.exit(undo_tags(args.undo))
     if args.full and not args.paths:
         # Checked here rather than at the sweep, which happens after the
         # whisper lookup: an unconfigured scope should not be reported as a
@@ -3213,6 +3461,9 @@ def main():
         if already:
             est_files = max(1, est_files - already)
 
+    if IGNORED_COUNT:
+        print(dim(f"Ignored      {IGNORED_COUNT} trailers/samples/extras "
+                  "(--no-ignore to include)"))
     if est_files:
         done = dim(f" ({total_before} minus {already} done)") if already else ""
         print(ellipsize(f"Scope        {num(est_files)} files, "

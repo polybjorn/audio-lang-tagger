@@ -67,9 +67,16 @@ audio-lang-tagger.py --auto           # tag gate-passing tracks, prompt for the 
 audio-lang-tagger.py --prescan        # unattended: scan + cache, never prompt
 audio-lang-tagger.py --bulk zxx PATH  # one code over a range you have judged
 audio-lang-tagger.py --plain          # line-mode prompts, no full-screen UI
+audio-lang-tagger.py --ledger         # review the last 20 applied tags
+audio-lang-tagger.py --undo 3         # revert the last 3 tags to und
 audio-lang-tagger.py --show-config    # print resolved paths and exit
 audio-lang-tagger.py --version        # print the version and exit
 ```
+
+Trailers, samples and `Extras/` folders are left out of every sweep, by the
+naming conventions Plex, Emby and Jellyfin share. `--ignore PATTERN` adds your
+own, `--no-ignore` turns the whole filter off, and a file named on the command
+line is always scanned: asking for a path is asking for that path.
 
 Interactive modes need a tty. Over ssh that means `ssh -t HOST
 audio-lang-tagger.py`.
@@ -213,6 +220,8 @@ wins over the one config management writes.
 | `--realtime-factor N` | `REALTIME` | `12` |
 | `--sonarr-config PATH` | `SONARR_CONFIG` | `/var/lib/sonarr/config.xml` |
 | `--radarr-config PATH` | `RADARR_CONFIG` | `/var/lib/radarr/config.xml` |
+| `--ignore PATTERN` (repeatable) | `IGNORE` (`:`-separated) | trailers, samples, extras folders |
+| `--no-ignore` | - | filter enabled |
 | `--no-arr` | - | arr lookup enabled |
 | `--jobs N` | - | `2` |
 
@@ -240,8 +249,22 @@ Everything lives in the state dir, and none of it is precious except the ledger:
 | `lang_tagger.{state,instance}.lock` | concurrency guards |
 
 A ledger row is `timestamp, path, track, und->code, mode, probability, chars`,
-where mode is `auto`, `manual` or `bulk`. To undo a tag, feed columns 2-4 back
-to `mkvpropedit`:
+where mode is `auto`, `manual`, `bulk` or `undo`.
+
+`--ledger [N]` prints the tail of it, which is how you check what `--auto`
+did while you were not watching. `--undo N` reverts the last N tags that are
+still in force, after one confirmation:
+
+```bash
+audio-lang-tagger.py --ledger 50
+audio-lang-tagger.py --undo 3
+```
+
+An undo appends its own corrective row rather than editing history, so a track
+that was reverted and later re-tagged is counted once, at its latest value. A
+track whose header no longer says what the ledger recorded is left alone and
+reported: something other than this tool changed it. For a single file by hand,
+the row gives `mkvpropedit` everything it needs:
 
 ```bash
 mkvpropedit "FILE" --edit track:a1 --set language=und
