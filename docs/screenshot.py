@@ -15,6 +15,7 @@ import asyncio
 import importlib.util
 import os
 import queue
+import re
 import tempfile
 import threading
 from pathlib import Path
@@ -59,6 +60,21 @@ def fake_work():
     return work_q
 
 
+def strip_font_cdn(path):
+    """Drop the cdnjs URLs textual writes into the @font-face rules.
+
+    GitHub renders the file as an image, where an external font would not
+    load anyway, so the only thing they do is fetch from a third party when
+    someone opens the SVG directly. local() plus the monospace fallback in
+    the stylesheet covers both cases.
+    """
+    svg = re.sub(r'src: local\("(FiraCode-(?:Regular|Bold))"\),\n'
+                 r'(?:\s*url\("https://[^\n]*\n)+',
+                 lambda m: f'src: local("{m.group(1)}");\n',
+                 path.read_text())
+    path.write_text(svg)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("-o", "--out", default=str(REPO / "docs" / "ui.svg"))
@@ -87,6 +103,7 @@ def main():
             app.save_screenshot(args.out)
 
     asyncio.run(shoot())
+    strip_font_cdn(Path(args.out))
     print(f"wrote {args.out}")
 
 
