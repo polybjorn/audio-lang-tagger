@@ -28,7 +28,7 @@
     <text x="745" y="124">header edit, no remux</text>
     <text x="530" y="240">for tracks the gates hold back</text>
     <text x="530" y="256">one key per decision</text>
-    <text x="750" y="244">append-only, reversible</text>
+    <text x="750" y="244">append-only, --undo reverts</text>
   </g>
   <g stroke="#8b949e" stroke-width="1.2" fill="none" marker-end="url(#arrow)">
     <path d="M190 112 H218"/>
