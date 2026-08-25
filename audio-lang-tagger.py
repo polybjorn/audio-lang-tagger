@@ -1342,7 +1342,8 @@ def record_tag(filepath, audio_pos, code, mode, analysis=None, old="und"):
     p=0.42 (the sparse-dialogue calibration short) when it admitted it on a 0.91 speech window."""
     from datetime import datetime
     line = "\t".join([
-        datetime.now().isoformat(timespec="seconds"), str(filepath),
+        datetime.now().isoformat(timespec="seconds"),
+        os.path.abspath(str(filepath)),
         f"a{audio_pos}", f"{old}->{code}", mode,
         f"{best_prob(analysis):.2f}" if analysis else "-",
         str(analysis["chars"]) if analysis else "-",
@@ -1994,9 +1995,12 @@ def drop_ignored(files):
 
 
 def find_mkv_files(paths):
+    """Absolute paths, always. A run started with a relative PATH used to
+    record itself that way, which left ledger rows that identify nothing once
+    the cwd changes and skip-list keys that miss on the next run."""
     files = []
     for p in paths:
-        p = Path(p)
+        p = Path(os.path.abspath(os.path.expanduser(str(p))))
         if p.is_file() and p.suffix.lower() == ".mkv":
             files.append(p)
         elif p.is_dir():
@@ -2020,7 +2024,7 @@ def load_worklist():
     paths = st.get("paths")
     if not isinstance(paths, list) or not paths:
         return None, st
-    files = sorted(Path(p) for p in paths)
+    files = sorted(Path(os.path.abspath(p)) for p in paths)
     return drop_ignored([p for p in files if p.is_file()]), st
 
 
