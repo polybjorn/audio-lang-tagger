@@ -1,0 +1,57 @@
+name: Bug report
+description: Something the tool got wrong, or a run that failed
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `audio-lang-tagger.py --version`.
+      placeholder: audio-lang-tagger.py 1.8.0
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      description: How the tool was invoked, flags included.
+      placeholder: audio-lang-tagger.py --auto /srv/media/tv
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: ledger
+    attributes:
+      label: Ledger row
+      description: >
+        If a tag was written, paste the row from `audio-lang-tagger.py --ledger`:
+        timestamp, path, track, und->code, mode, probability, chars. Leave empty
+        if nothing was tagged.
+      render: text
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Terminal output or traceback. Add `--plain` if the full-screen UI hid it.
+      render: text
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >
+        OS and Python version, plus where whisper.cpp, ffmpeg and mkvtoolnix came
+        from (package manager, snap, self-built). `audio-lang-tagger.py --show-config`
+        prints the resolved paths.
+    validations:
+      required: true
