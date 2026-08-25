@@ -14,8 +14,9 @@ interactively.
 
 One-time setup: install whisper.cpp and fetch a model.
   pacman -S whisper-cpp          # Arch
-  apt install whisper.cpp        # Debian/Ubuntu (or build from source)
-  brew install whisper-cpp       # macOS
+  apt install whisper.cpp        # Debian 13+, Ubuntu 26.04+
+  dnf install whisper-cpp        # Fedora
+  brew install whisper-cpp       # macOS, and older releases build from source
   mkdir -p ~/.local/share/whisper
   curl -L -o ~/.local/share/whisper/ggml-base.bin \\
     https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
@@ -24,8 +25,8 @@ Also needs ffmpeg/ffprobe and mkvtoolnix (mkvpropedit, mkvmerge, mkvextract).
 Usage (interactive modes need a tty; over ssh use `ssh -t HOST ...`):
   audio-lang-tagger.py                  # work the saved candidate queue
   audio-lang-tagger.py --plain          # line-mode prompts, no full-screen UI
-  audio-lang-tagger.py --auto           # auto-tag gate-passing tracks, prompt rest
-  audio-lang-tagger.py --prescan        # unattended: scan+cache, tag gate-passers, never prompt
+  audio-lang-tagger.py --auto           # tag gate-passers, prompt for the rest
+  audio-lang-tagger.py --prescan        # unattended: scan+cache, never prompt
   audio-lang-tagger.py --jobs N         # concurrent scans (default 2)
   audio-lang-tagger.py --full           # re-sweep every configured media dir
   audio-lang-tagger.py PATH [PATH...]   # limit to given files/dirs
@@ -42,35 +43,36 @@ what resolved.
 Only --media-dir has no default: a run given explicit PATHs needs nothing set,
 while --full and the queue run need to know what the library is.
 
---auto tags without prompting only when ALL gates pass: every sample position
-detects the same language at >=0.90 (or, on a track short enough to be scanned
-whole, that single gap-free pass reaches >=0.90 on either the opening 30s or
-the densest 30s of speech - see below), the
-transcript is coherent (>=40 chars, >=8 words, and either >=50% unique words or
-- once a transcript is long enough for that ratio to sag - >=100 distinct words
-at >=20% unique; music hallucinations are degenerate repetition or one
-stretched word, and stay degenerate however long they run), Sonarr/Radarr's original
-language agrees, year >= 1940 (the episode's own air year where Sonarr knows
-it, not the series year - an anthology's start year blocks everything and
-discriminates nothing), genre is not music/concert, the file has a
-single non-commentary audio track, and the language is outside the
-no/nn/da/sv cluster whisper confuses. Every applied tag - auto and
-manual - is appended to lang_tagger_tags.tsv in the state dir (old value
-always und), so any batch or misclick is reviewable and reversible. "No speech found" never auto-tags anything.
+--auto tags without prompting only when ALL gates pass. Every sample position
+detects the same language at >=0.90; on a track short enough to be scanned
+whole, that single gap-free pass has to reach 0.90 on either the opening 30s or
+the densest 30s of speech (see below). The transcript is coherent: >=40 chars,
+>=8 words, and either >=50% unique words or, once a transcript is long enough
+for that ratio to sag, >=100 distinct words at >=20% unique - music
+hallucinations are degenerate repetition or one stretched word, and stay
+degenerate however long they run. Sonarr/Radarr's original language agrees.
+Year is 1940 or later, using the episode's own air year where Sonarr knows it
+rather than the series year, because an anthology's start year blocks
+everything and discriminates nothing. Genre is not music/concert. The file has
+a single non-commentary audio track, and the language is outside the
+no/nn/da/sv cluster whisper confuses. "No speech found" never auto-tags
+anything.
+
+Every applied tag, auto and manual, is appended to lang_tagger_tags.tsv in the
+state dir (old value always und), so any batch or misclick is reviewable and
+reversible.
 
 Whisper only ever detects language from 30 seconds of audio, and on a
 whole-track pass those are the FIRST 30 - which on a cartoon is the musical
-title card. That put the gate at odds with the evidence: 8 known-dialogue
-animated shorts transcribed cleanly end to end, but only 4 cleared 0.90 on their
-opening (a 1940 sparse-dialogue short: 99 coherent words, p=0.42). So after a whole-track
-transcription the detector is asked a second time about the 30s window that
-actually held the most words, and the gate grades the better of the two
-readings. All 8 then cleared 0.90, while a degenerate music case (a 1956
-sung-through short: 43 distinct words inside 425) stayed at 0.81 and is rejected by the
-coherence floor too. Constants and the full calibration sit at
-SPEECH_WINDOW_SECONDS. Distinct-word count was measured as the alternative and
-rejected: the sparse-dialogue short has 50 distinct words, below sung shorts
-that must not pass (52 in one 1956 case), so no threshold separates them.
+title card. That put the gate at odds with the evidence: of 8 known-dialogue
+animated shorts that transcribed cleanly end to end, only 4 cleared 0.90 on
+their opening. So after a whole-track transcription the detector is asked a
+second time about the 30s window that actually held the most words, and the
+gate grades the better of the two readings. All 8 then cleared 0.90, while a
+sung-through 1956 short stayed at 0.81 and is rejected by the coherence floor
+too. The measurements behind that, and behind the unique-word ratio the floor
+grades instead of a plain distinct-word count, are in the repo's
+docs/design-notes.md.
 
 The card (never the auto gates) uses the same two readings once more: a
 degenerate transcript whose better reading still clears 0.90 is presented as
@@ -78,8 +80,8 @@ that language instead of zxx, because music never reaches that bar - it is
 sparse real speech drowned in repetition padding, and the human decides.
 
 --bulk CODE PATH... sets one language across a whole range after a single
-confirmation, for the calls no scan can make: a run of pre-1940 animated shorts,
-a dialogue-free cartoon series, where zxx-vs-eng is a human
+confirmation, for the calls no scan can make: a run of pre-1940 animated
+shorts, or a dialogue-free cartoon series, where zxx-vs-eng is a human
 judgement about sparse dialogue. It never scans, PATHs are mandatory, and a
 cached scan that contradicts the code holds its file back for the interactive
 pass. zxx is checked far more suspiciously than a language code is, because it
@@ -112,14 +114,15 @@ location is --queue-file; without one, the first run falls back to a full
 sweep and later runs read the queue this tool prunes on the way out.
 
 Long sweeps: every whisper result is cached by path+mtime+track in
-.cleanup/lang_tagger_scans.json, so a scan is paid for once and an interrupted
-run resumes for free (mtime moves whenever a file is retagged or replaced, so a
-stale entry can never be served). The intended shape for a big queue is
---prescan in the background first - unattended, needs no tty, tags whatever the
---auto gates allow and caches everything else - then an interactive pass that
-does no scanning at all. Measured on one file: 34s cold, 1s warm, and the first
-card in 0.5s instead of 34s. Cached files are served ahead of unscanned ones,
-so a partially prescanned queue still opens with instant cards.
+lang_tagger_scans.json in the state dir, so a scan is paid for once and an
+interrupted run resumes for free (mtime moves whenever a file is retagged or
+replaced, so a stale entry can never be served). The intended shape for a big
+queue is --prescan in the background first - unattended, needs no tty, tags
+whatever the --auto gates allow and caches everything else - then an
+interactive pass that does no scanning at all. Measured on one file: 34s cold,
+1s warm, with the first card in 0.5s. Cached files are served ahead of
+unscanned ones, so a partially prescanned queue still opens with instant
+cards.
 
 Scans run --jobs at a time (default 2, at cpu_count/jobs whisper threads each).
 Benchmarked on a 6-core box that is only 1.28x one job, because whisper
@@ -130,9 +133,9 @@ counter is a running tally.
 Two runs at once are survivable but not recommended. Writes to the scan cache
 and the saved queue are read-modify-write under an flock, so they merge instead
 of clobbering, and a second instance is detected and announced (a second
---prescan is refused outright). What still isn't safe: both runs compete for the
-same cores, and both can reach the same file and tag it twice. Prefer finishing
-the prescan first.
+--prescan is refused outright). What still isn't safe: both runs compete for
+the same cores, and both can reach the same file and tag it twice. Prefer
+finishing the prescan first.
 
 Scan strategy: a track short enough to transcribe whole inside
 SCAN_BUDGET_SECONDS of whisper time (~12 min of audio) is scanned whole on the
@@ -173,9 +176,11 @@ Prompt keys:
           ledger row, a never-ask is removed from the skip list
   q       quit
 
-Both keys are hidden on a track that was already scanned whole, where 'f'
-would redo identical work. Where they do apply, the card's runtime row and the
-'f' estimate show what each would cost.
+Single-letter keys are case-insensitive - each action has its own letter, so
+capitalization cannot change what a keypress does. d and f are hidden on a
+track that was already scanned whole, where they would redo identical work;
+where they do apply, the card's runtime row and the 'f' estimate show what each
+would cost.
 
 The workload counter starts from the saved queue's total, minus anything the
 tag log and skip list show as already done, and drops its "~" once a
@@ -186,9 +191,6 @@ of that difference came from here. Finished files are pruned from the saved
 queue on exit. A run given an explicit PATH counts against that scope instead:
 the library-wide total describes a different run, and using it showed an
 18-file season as [1/~1500].
-
-Single-letter keys are case-insensitive - each action has its own letter,
-so capitalization can't change what a keypress does.
 
 A detected language with zero transcript evidence is never the Enter
 default (that is the music-hallucination case): accepting it requires
