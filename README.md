@@ -104,9 +104,10 @@ corrective ledger row, a never-ask comes out of the skip list.
 
 ## Connecting Sonarr/Radarr
 
-Optional - without them the tool works fully interactively; they gate `--auto`
-(original-language corroboration, year, genres) and add an agree/disagree line
-to the card. Two ways in:
+Optional for interactive use, required for `--auto`: corroboration against the
+title's original language is one of the gates, so a track with no arr metadata
+is never auto-tagged. Without an arr the tool still works fully interactively,
+minus the agree/disagree line on the card. Two ways in:
 
 - **Same host, native install:** automatic. The tool reads the arr's own
   `config.xml` (default `/var/lib/sonarr/`, `/var/lib/radarr/`) and takes the
@@ -125,8 +126,9 @@ the auto gates and more reach the interactive card.
 Why only the arrs? Corroboration hinges on the title's *original language*:
 whisper hears "this is Italian", the arr knows "this film was made in
 Italian", and unattended tagging requires the two to agree independently.
-Jellyfin and the Kodi NFO standard do not store that fact, so neither can
-stand in ([design notes][notes]).
+Jellyfin and the Kodi NFO standard do not store that fact. TMDB does, but only
+the arr knows which title a given path is, and matching a filename to a title
+would turn a lookup into a guess ([design notes][notes]).
 
 ## How it decides
 

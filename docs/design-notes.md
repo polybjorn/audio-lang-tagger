@@ -76,6 +76,17 @@ This is also why a failed arr lookup degrades to "no corroboration" rather than
 to an error: the consequence is simply that fewer tracks pass the gates and
 more reach the human.
 
+Asking TMDB directly would put the same fact within reach of anyone without an
+arr, and the reason not to is the join rather than the data. The arr placed the
+file, so it already knows which title a path belongs to. TMDB has to be told,
+and the only thing left to tell it is the filename, which turns a lookup into a
+guess across release names, anthologies, multi-episode files and specials. A
+wrong guess does not degrade the way a missing answer does: it supplies the
+original language of some other film with full confidence, and the gate reads
+that as independent agreement. The same join carries the year gate, which needs
+the episode's own air date rather than the series'. An NFO carrying a TMDB id
+would be a real join key, but the tool does not read NFOs today.
+
 ## What the other gates are protecting against
 
 - **Year >= 1940** is a proxy for sparse dialogue, not for age as such. It uses
