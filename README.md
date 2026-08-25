@@ -61,7 +61,6 @@ is detail you can come back to later.
 ```bash
 audio-lang-tagger.py PATH [PATH...]   # work through the given files/dirs
 audio-lang-tagger.py                  # work the saved candidate queue
-audio-lang-tagger.py --list           # report untagged tracks, change nothing
 audio-lang-tagger.py --full           # re-sweep every configured media dir
 audio-lang-tagger.py --auto           # tag gate-passing tracks, prompt for the rest
 audio-lang-tagger.py --prescan        # unattended: scan + cache, never prompt
