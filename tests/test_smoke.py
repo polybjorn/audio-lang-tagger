@@ -4,7 +4,9 @@ logic behaves. Stdlib only, run from repo root:
     python3 -m unittest discover -s tests
 """
 
+import contextlib
 import importlib.util
+import io
 import subprocess
 import sys
 import tempfile
@@ -97,6 +99,30 @@ class IgnoreRules(unittest.TestCase):
             self.assertFalse(self.mod.is_ignored("/m/Film-trailer.mkv"))
         finally:
             self.mod.USE_IGNORE = True
+
+
+class PathScoping(unittest.TestCase):
+    """A path that does not exist has to stop the run: reporting zero untagged
+    tracks for an unmounted share is the one wrong answer with no symptom."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load_module()
+
+    def test_missing_path_exits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(SystemExit) as caught, \
+                    contextlib.redirect_stdout(io.StringIO()) as out:
+                self.mod.find_mkv_files([Path(tmp) / "not-here"])
+            self.assertEqual(caught.exception.code, 1)
+            self.assertIn("not-here", out.getvalue())
+
+    def test_existing_paths_are_returned_absolute(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            mkv = Path(tmp) / "Film.mkv"
+            mkv.touch()
+            self.assertEqual(self.mod.find_mkv_files([tmp]), [mkv])
+            self.assertEqual(self.mod.find_mkv_files([mkv]), [mkv])
 
 
 class LedgerReading(unittest.TestCase):

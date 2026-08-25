@@ -217,7 +217,7 @@ import threading
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-__version__ = "1.8.0"
+__version__ = "1.8.1"
 
 # ── Runtime configuration ───────────────────────────────────────────────────
 # Every path below is resolved by configure() before any work starts, from
@@ -1999,14 +1999,24 @@ def drop_ignored(files):
 def find_mkv_files(paths):
     """Absolute paths, always. A run started with a relative PATH used to
     record itself that way, which left ledger rows that identify nothing once
-    the cwd changes and skip-list keys that miss on the next run."""
-    files = []
+    the cwd changes and skip-list keys that miss on the next run.
+
+    A path that does not exist ends the run. Silently skipping one made a typo
+    and an unmounted share both report a clean library, which is the one
+    answer this tool must never give when it has not looked."""
+    files, missing = [], []
     for p in paths:
         p = Path(os.path.abspath(os.path.expanduser(str(p))))
         if p.is_file() and p.suffix.lower() == ".mkv":
             files.append(p)
         elif p.is_dir():
             files.extend(drop_ignored(p.rglob("*.mkv")))
+        elif not p.exists():
+            missing.append(p)
+    if missing:
+        print(red(f"Path not found: {', '.join(str(p) for p in missing)}"))
+        print("  a typo, or storage that is not mounted")
+        sys.exit(1)
     return sorted(files)
 
 
