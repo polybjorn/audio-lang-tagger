@@ -6,13 +6,10 @@ confirmation before writing the tag with `mkvpropedit`.
 
 The edit is a track-header change, not a remux: nothing is re-encoded, no data
 is copied, and a 40 GB file is tagged in well under a second. Media servers stop
-labelling those tracks "Unknown", and a cleanup pass can finally act on them:
-track strippers like [radarr-striptracks][striptracks] have to keep every `und`
-track, because removing one blind risks leaving a file with no audio at all.
-Identify them and that pass can decide.
+labelling those tracks "Unknown", and a library-cleanup pass can strip unwanted
+audio with the confidence that everything left is identified.
 
 [whisper.cpp]: https://github.com/ggml-org/whisper.cpp
-[striptracks]: https://github.com/TheCaptain989/radarr-striptracks
 
 ![The interactive card: a progress header, the track's codec, runtime and size, whisper's verdict with the words behind it, the detector reading, Sonarr's agreement, a line of what was heard, and the single-key choices along the bottom](docs/ui.svg)
 
@@ -345,7 +342,13 @@ its effort on making each confirmation cheap and every tag reversible. Do not
 point both at one library: two tools writing track headers, one ledger between
 them.
 
+It pairs with the track strippers rather than competing with them:
+[radarr-striptracks][striptracks] and its like have to keep every `und` track,
+because removing one blind risks a file with no audio left. Identify them first
+and that pass can decide.
+
 It runs weekly on one library. Bug reports with a `--version` and a ledger row
 are welcome; large features may be declined to keep the tool small.
 
 [uldas]: https://github.com/netplexflix/MKV-Undefined-Audio-Language-Detector
+[striptracks]: https://github.com/TheCaptain989/radarr-striptracks
