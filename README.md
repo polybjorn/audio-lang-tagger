@@ -112,8 +112,7 @@ Why only the arrs? Corroboration hinges on the title's *original language*:
 whisper hears "this is Italian", the arr knows "this film was made in
 Italian", and unattended tagging requires the two to agree independently.
 Jellyfin and the Kodi NFO standard do not store that fact, so neither can
-stand in - year and genres alone would look like a safety check without
-being one.
+stand in ([design notes][notes]).
 
 ## How it decides
 
@@ -123,9 +122,9 @@ being one.
 </picture>
 
 Language detection off a 30-second sample is wrong often enough that blind
-tagging is not usable, and it is wrong in a specific way: whisper's language
-head fires confidently on music: a sung-through short "transcribes" a
-219-word `La la la` loop at p=0.86.
+tagging is not usable, and it is wrong in two opposite ways: whisper's language
+head fires confidently on music, and reads low on a track that opens with a
+title score. The [design notes][notes] carry the measurements.
 
 So the tool separates the two questions. *Are there words here* is answered from
 the transcript (character count, word count, distinct-word ratio), and *which
@@ -190,6 +189,11 @@ holds its file back for the interactive pass. `zxx` is checked far more
 suspiciously than a language code, because it claims absence.
 
 ## Reference
+
+The [design notes][notes] cover the reasoning and the calibration behind all of
+the above. What follows is lookup detail.
+
+[notes]: docs/design-notes.md
 
 <details>
 <summary><b>Configuration</b> - flags, environment, config file</summary>
