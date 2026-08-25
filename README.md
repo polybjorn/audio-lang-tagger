@@ -328,8 +328,10 @@ cd audio-lang-tagger
 python3 -m unittest discover -s tests
 ```
 
-Smoke coverage: the script imports and builds its parser, and the pure
-formatters behave. CI runs the same suite on every push.
+Smoke coverage: the script imports and builds its parser, the formatters
+behave, the extras filter skips by convention, `--undo` reads the ledger
+correctly, and every `--auto` gate is pinned at the value documented above.
+CI runs the same suite on every push.
 
 </details>
 

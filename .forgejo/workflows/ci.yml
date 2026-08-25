@@ -1,5 +1,6 @@
 # Smoke gate on the media runner (python label -> python:3.12). Stdlib-only
-# suite: the script imports and parses, formatters behave. Deploys go through
+# suite: the script imports and parses, and the pure decision logic (auto
+# gates, coherence floor, ledger replay) holds. Deploys go through
 # the dotfiles version pin, so a red run here flags a broken main before a
 # pin bump ships it to the fleet.
 name: CI
