@@ -348,8 +348,7 @@ It pairs with the track strippers rather than competing with them:
 because removing one blind risks a file with no audio left. Identify them first
 and that pass can decide.
 
-Bug reports with a `--version` and a ledger row are welcome; large features may
-be declined to keep the tool small.
+Bug reports with a `--version` and a ledger row are welcome.
 
 [uldas]: https://github.com/netplexflix/MKV-Undefined-Audio-Language-Detector
 [striptracks]: https://github.com/TheCaptain989/radarr-striptracks
