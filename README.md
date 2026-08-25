@@ -13,10 +13,7 @@ audio with the confidence that everything left is identified.
 
 [whisper.cpp]: https://github.com/ggerganov/whisper.cpp
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/pipeline-dark.svg">
-  <img src="docs/pipeline.svg" alt="Pipeline: untagged tracks are scanned by whisper.cpp, checked against the auto gates, and tagged by mkvpropedit; gate failures go to an interactive confirmation card; every tag lands in the ledger">
-</picture>
+![The interactive card: a progress header, the track's codec, runtime and size, whisper's verdict with the words behind it, the detector reading, Sonarr's agreement, a line of what was heard, and the single-key choices along the bottom](docs/ui.svg)
 
 ## Quick start
 
@@ -79,26 +76,11 @@ audio-lang-tagger.py`.
 
 The interactive run is a full-screen app (via [textual][], optional -
 `pip install textual`; without it the tool falls back to plain line-mode
-prompts) with a progress header, live scan status and a strip of recent
-decisions. Keys are single presses, no Enter; typing a replacement code
-starts with `c`.
+prompts) - the screenshot at the top of this page. A progress header, live
+scan status and the last decision taken frame the card; keys are single
+presses, no Enter, and typing a replacement code starts with `c`.
 
 [textual]: https://textual.textualize.io/
-
-Each card shows what was heard and what it cost:
-
-```
-[12/~340] series/Harbour Watch/Season 1/
-          Harbour Watch - S01E03.mkv
-
-  track    a1            eac3   6ch   640 kb/s   52m18s   2.4 GB
-  whisper  eng           184 words in 1 window
-  detector eng 97%
-  sonarr   eng           agree
-  heard    "right then let's see what the tide brought in…"
-
-  Enter=tag eng    xxx=code    d=deep scan    f=full scan ~4m    s=skip    n=never ask    q=quit
-```
 
 `n` records the track in a skip list so it is never asked about again. `u`
 (full-screen UI, single level) undoes the last decision and re-shows its card:
@@ -134,6 +116,11 @@ stand in - year and genres alone would look like a safety check without
 being one.
 
 ## How it decides
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/pipeline-dark.svg">
+  <img src="docs/pipeline.svg" alt="Pipeline: untagged tracks are scanned by whisper.cpp, checked against the auto gates, and tagged by mkvpropedit; gate failures go to an interactive confirmation card; every tag lands in the ledger">
+</picture>
 
 Language detection off a 30-second sample is wrong often enough that blind
 tagging is not usable, and it is wrong in a specific way: whisper's language
