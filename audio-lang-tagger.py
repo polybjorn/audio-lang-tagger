@@ -78,8 +78,8 @@ that language instead of zxx, because music never reaches that bar - it is
 sparse real speech drowned in repetition padding, and the human decides.
 
 --bulk CODE PATH... sets one language across a whole range after a single
-confirmation, for the calls no scan can make: the ~200 pre-1940 animated shorts
-and a dialogue-free cartoon series, where zxx-vs-eng is a human
+confirmation, for the calls no scan can make: a run of pre-1940 animated shorts,
+a dialogue-free cartoon series, where zxx-vs-eng is a human
 judgement about sparse dialogue. It never scans, PATHs are mandatory, and a
 cached scan that contradicts the code holds its file back for the interactive
 pass. zxx is checked far more suspiciously than a language code is, because it
@@ -184,8 +184,8 @@ the first cards). The recount matters because the tag log only sees this
 tool's own work: a 1500-file queue measured 1377 still outstanding, and only 7
 of that difference came from here. Finished files are pruned from the saved
 queue on exit. A run given an explicit PATH counts against that scope instead:
-the weekly total describes a different run, and using it showed an 18-file
-season as [1/~1500].
+the library-wide total describes a different run, and using it showed an
+18-file season as [1/~1500].
 
 Single-letter keys are case-insensitive - each action has its own letter,
 so capitalization can't change what a keypress does.
@@ -2396,10 +2396,11 @@ def bulk_tag(paths, code, skips):
     confirmation, logging each file to the audit ledger exactly as an
     individual tag would.
 
-    This exists for the populations no scan can decide: ~200 pre-1940 animated
-    shorts and a dialogue-free cartoon series, where zxx-vs-eng is a
+    This exists for the populations no scan can decide: pre-1940 animated
+    shorts, dialogue-free cartoon series, where zxx-vs-eng is a
     human judgement about sparse dialogue rather than something whisper can
-    settle. The alternative is 200 identical keypresses. A previous ad-hoc
+    settle. The alternative is one identical keypress per file, by the
+    hundred. A previous ad-hoc
     script did this and wrote nothing to the ledger, which cost a session to
     reconstruct afterwards - hence one und->code row per track here, with the
     mode column reading 'bulk' so a batch is greppable and reversible as one.

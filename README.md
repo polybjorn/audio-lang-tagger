@@ -294,13 +294,10 @@ the first run falls back to a full sweep and writes one on the way out. Finished
 files are pruned from it on exit, so the counter starts from a true number next
 time.
 
-On the fleet this was extracted from, that scanner is media-tools'
-`video-cleanup` (a companion library-cleanup tool, not yet published): its
-health pass already probes every stream, so it writes the queue as a
-by-product and reads back `lang_tagger_skips.txt` to leave the tracks
-answered with `n` out of it. That only works while both tools point at the
-same state dir, which is the one setting they have to agree on. Any scanner
-that writes the JSON above works the same way.
+The natural writer is a library-health pass that already probes every stream:
+the queue costs it nothing extra, and reading `lang_tagger_skips.txt` back lets
+it leave out the tracks answered with `n`. Both tools have to point at the same
+state dir for that, which is the one setting they must agree on.
 
 </details>
 
@@ -351,8 +348,8 @@ It pairs with the track strippers rather than competing with them:
 because removing one blind risks a file with no audio left. Identify them first
 and that pass can decide.
 
-It runs weekly on one library. Bug reports with a `--version` and a ledger row
-are welcome; large features may be declined to keep the tool small.
+Bug reports with a `--version` and a ledger row are welcome; large features may
+be declined to keep the tool small.
 
 [uldas]: https://github.com/netplexflix/MKV-Undefined-Audio-Language-Detector
 [striptracks]: https://github.com/TheCaptain989/radarr-striptracks
