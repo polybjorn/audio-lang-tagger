@@ -307,6 +307,16 @@ formatters behave. CI runs the same suite on every push.
 
 ## Scope
 
-A personal tool, published because the niche is empty, and running weekly on
-one library. Bug reports with a `--version` and a ledger row are welcome;
-large features may be declined to keep the tool small.
+A personal tool, published because the tools that already do this tag
+unattended on a confidence threshold, and the measurements in the [design
+notes][notes] say a threshold cannot carry that weight. [ULDAS][uldas] covers
+more ground (subtitles, remuxing, a web UI, GPU) and is the better fit for
+hands-off batch tagging. This one assumes you would rather confirm, and spends
+its effort on making each confirmation cheap and every tag reversible. Do not
+point both at one library: two tools writing track headers, one ledger between
+them.
+
+It runs weekly on one library. Bug reports with a `--version` and a ledger row
+are welcome; large features may be declined to keep the tool small.
+
+[uldas]: https://github.com/netplexflix/MKV-Undefined-Audio-Language-Detector
