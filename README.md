@@ -11,7 +11,7 @@ track strippers like [radarr-striptracks][striptracks] have to keep every `und`
 track, because removing one blind risks leaving a file with no audio at all.
 Identify them and that pass can decide.
 
-[whisper.cpp]: https://github.com/ggerganov/whisper.cpp
+[whisper.cpp]: https://github.com/ggml-org/whisper.cpp
 [striptracks]: https://github.com/TheCaptain989/radarr-striptracks
 
 ![The interactive card: a progress header, the track's codec, runtime and size, whisper's verdict with the words behind it, the detector reading, Sonarr's agreement, a line of what was heard, and the single-key choices along the bottom](docs/ui.svg)
@@ -21,11 +21,16 @@ Identify them and that pass can decide.
 Needs Python 3.8+ (nothing to `pip install`) and three common tools:
 
 ```bash
-brew install whisper-cpp ffmpeg mkvtoolnix        # macOS
-sudo pacman -S whisper-cpp ffmpeg mkvtoolnix-cli  # Arch
-# Debian/Ubuntu: sudo apt install ffmpeg mkvtoolnix, and build whisper.cpp
-# from source (https://github.com/ggerganov/whisper.cpp)
+brew install whisper-cpp ffmpeg mkvtoolnix           # macOS
+sudo pacman -S whisper-cpp ffmpeg mkvtoolnix-cli     # Arch
+sudo apt install whisper.cpp ffmpeg mkvtoolnix       # Debian 13+, Ubuntu 26.04+
+sudo dnf install whisper-cpp ffmpeg mkvtoolnix       # Fedora
 ```
+
+Older Debian and Ubuntu have everything but whisper.cpp: [build it][whisper.cpp]
+or `snap install whisper-cpp`. Packages call the binary `whisper-cli`,
+`whisper-cpp` or `whisper`; the tool takes any of them, and `--show-config`
+says which one it found.
 
 Fetch the language model once (~150 MB):
 
@@ -150,8 +155,8 @@ confirmation cheap:
   conclusive.
 - Every whisper result is cached by path + mtime + track, so an interrupted
   sweep resumes for free. Measured on one file: 34s cold, 1s warm.
-- Every applied tag is appended to a TSV ledger (`old value` is always `und`),
-  so any batch or misclick is enumerable and reversible.
+- Every applied tag is appended to a TSV ledger, so a bad batch or a misclick
+  is reviewable with `--ledger` and reversible with `--undo`.
 
 The `base` model on a 6-core CPU is what every threshold was calibrated
 against. A larger model, or a library unlike the one it was tuned on, will
@@ -228,9 +233,9 @@ wins over the one config management writes.
 
 `--realtime-factor` is how many times realtime this machine transcribes,
 end-to-end including the ffmpeg extract. It sets which tracks are short enough
-to scan whole and what the `f` key estimates, and nothing else. Measured
-10.5-15x on a 6-core Alder Lake CPU with the `base` model; 12 is the middle.
-Re-measure on different hardware.
+to scan whole and what the `f` key estimates, and nothing else. The default of
+12 is measured, not guessed ([design notes][notes]); re-measure on different
+hardware.
 
 An example config file is in [`audio-lang-tagger.conf.example`](audio-lang-tagger.conf.example).
 
