@@ -22,12 +22,9 @@ brew install whisper-cpp ffmpeg mkvtoolnix           # macOS
 sudo pacman -S whisper-cpp ffmpeg mkvtoolnix-cli     # Arch
 sudo apt install whisper.cpp ffmpeg mkvtoolnix       # Debian 13+, Ubuntu 26.04+
 sudo dnf install whisper-cpp ffmpeg mkvtoolnix       # Fedora
+# no whisper.cpp package (Ubuntu 24.04 and older)? snap install whisper-cpp,
+# or build it: https://github.com/ggml-org/whisper.cpp
 ```
-
-Older Debian and Ubuntu have everything but whisper.cpp: [build it][whisper.cpp]
-or `snap install whisper-cpp`. Packages call the binary `whisper-cli`,
-`whisper-cpp` or `whisper`; the tool takes any of them, and `--show-config`
-says which one it found.
 
 Fetch the language model once (~150 MB):
 
@@ -86,17 +83,24 @@ audio-lang-tagger.py`.
 
 The interactive run is a full-screen app (via [textual][], optional -
 `pip install textual`; without it the tool falls back to plain line-mode
-prompts) - the screenshot at the top of this page. A progress header, live
-scan status and the last decision taken frame the card; keys are single
-presses, no Enter, and typing a replacement code starts with `c`.
+prompts). It is the screenshot at the top of this page: a progress header,
+live scan status and the last decision taken, framing one card. Keys are
+single presses, no Enter:
+
+| Key | Does |
+|---|---|
+| `Enter` | tag with the suggested code |
+| `c` | type a different code (`esc` cancels) |
+| `d` / `f` | deep or full scan, when the samples were not enough |
+| `s` | skip this file for now |
+| `n` | never ask about this track again |
+| `u` | undo the last decision, one level (full-screen UI only) |
+| `q` | quit cleanly, flushing the scan cache and pruning the queue |
+
+`u` re-shows the card it took back: a tag is written back to `und` with a
+corrective ledger row, a never-ask comes out of the skip list.
 
 [textual]: https://textual.textualize.io/
-
-`n` records the track in a skip list so it is never asked about again. `u`
-(full-screen UI, single level) undoes the last decision and re-shows its card:
-a tag is written back to `und` with a corrective ledger row, a never-ask is
-taken back out of the skip list. `q` exits cleanly, flushing the scan cache
-and pruning the queue.
 
 ## Connecting Sonarr/Radarr
 
