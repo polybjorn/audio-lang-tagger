@@ -63,7 +63,7 @@ decides.
 ## Why only Sonarr and Radarr corroborate
 
 Corroboration hinges on one fact: the title's *original language*. Whisper
-hears "this is Italian"; the arr knows "this film was made in Italian".
+hears "this is Italian"; the arr knows "this recording was made in Italian".
 Unattended tagging requires those two to have been arrived at independently.
 
 TMDB holds that fact and the arrs pass it through their API. Jellyfin scrapes
@@ -82,7 +82,7 @@ file, so it already knows which title a path belongs to. TMDB has to be told,
 and the only thing left to tell it is the filename, which turns a lookup into a
 guess across release names, anthologies, multi-episode files and specials. A
 wrong guess does not degrade the way a missing answer does: it supplies the
-original language of some other film with full confidence, and the gate reads
+original language of some other title with full confidence, and the gate reads
 that as independent agreement. The same join carries the year gate, which needs
 the episode's own air date rather than the series'. An NFO carrying a TMDB id
 would be a real join key, but the tool does not read NFOs today.
