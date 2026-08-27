@@ -345,11 +345,22 @@ purpose - an mp3 has no per-track language header to be wrong about, only a tag
 field, so the problem this tool solves does not arise.
 
 A personal tool, published because the tools that already do this tag
-unattended on a confidence threshold, and the [design notes][notes] measure why
-a threshold cannot carry that weight. [ULDAS][uldas] covers more ground
-(subtitles, remuxing, a web UI, GPU) and is the better fit for hands-off batch
-tagging. This one assumes you would rather confirm. Do not point both at one
-library: two tools writing track headers, one ledger between them.
+unattended on a confidence threshold, and the two errors are not the same size.
+Being asked costs a second; a wrong language header is silent, persists, and is
+acted on later by whatever reads it. A threshold would still be defensible if
+confidence ranked the safe cases above the risky ones, and the [design
+notes][notes] measure that it does not: p=0.86 on a 219-word `La la la` loop,
+p=0.42 on a track holding 99 clean words. They fail in opposite directions, so
+no cutoff orders them correctly, and a larger model shifts both without fixing
+the ordering.
+
+[ULDAS][uldas] covers more ground (subtitles, remuxing, a web UI, GPU) and is
+the more capable tool if you want a library handled without being asked. Its
+`dry_run` prints the same decisions without writing them, but there is no
+approve step between that and a full unattended run. This one takes the other
+side of that trade and assumes you would rather confirm.
+Do not point both at one library: two tools writing track headers, one ledger
+between them.
 
 If you also run a track stripper, this complements it rather than competing:
 [radarr-striptracks][striptracks] and its like have to keep every `und` track,
