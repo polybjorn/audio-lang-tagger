@@ -28,7 +28,7 @@ Usage (interactive modes need a tty; over ssh use `ssh -t HOST ...`):
   audio-lang-tagger.py --auto           # tag gate-passers, prompt for the rest
   audio-lang-tagger.py --prescan        # unattended: scan+cache, never prompt
   audio-lang-tagger.py --jobs N         # concurrent scans (default 2)
-  audio-lang-tagger.py --full           # re-sweep every configured media dir
+  audio-lang-tagger.py --full           # re-sweep every configured root
   audio-lang-tagger.py PATH [PATH...]   # limit to given files/dirs
   audio-lang-tagger.py --list           # report untagged tracks, no prompts
   audio-lang-tagger.py --bulk CODE PATH # one code over a judged range
@@ -3233,7 +3233,7 @@ def main():
     parser.add_argument("--list", action="store_true",
                         help="only report untagged tracks, no prompts or edits")
     parser.add_argument("--full", action="store_true",
-                        help="re-sweep every configured media dir instead of "
+                        help="re-sweep every configured root instead of "
                              "working the saved queue")
     parser.add_argument("--auto", action="store_true",
                         help="tag without prompting when every gate passes "
