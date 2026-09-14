@@ -52,11 +52,34 @@ jobs:
             git checkout -q FETCH_HEAD
           fi
       - name: Check commit messages
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             ./check-attribution.sh commits pr-base..pr-head
           else
-            ./check-attribution.sh commits -1
+            # A push carries the range it added; read that, not just the tip.
+            # On main the tip is a merge commit, which carries none of the
+            # trailers its parents do, so `-1` reported success on a push that
+            # had just landed one.
+            #
+            # Fallbacks, narrowest first: $before is missing (a runner that
+            # does not hand it over), zeroed (first push to the branch) or no
+            # longer in history (a rewrite), so use the side that was merged
+            # in; and for a root commit with no parent at all, the tip alone,
+            # which is what the old form did.
+            range=-1
+            if git rev-parse -q --verify "$AFTER^1^{commit}" >/dev/null; then
+              range="$AFTER^1..$AFTER"
+            fi
+            if [ -n "${BEFORE:-}" ] \
+              && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+              && git rev-parse -q --verify "$BEFORE^{commit}" >/dev/null; then
+              range="$BEFORE..$AFTER"
+            fi
+            echo "checking range: $range"
+            ./check-attribution.sh commits "$range"
           fi
       - name: Check PR description
         if: github.event_name == 'pull_request'
