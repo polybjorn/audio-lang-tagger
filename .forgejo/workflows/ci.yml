@@ -3,10 +3,15 @@
 # gates, coherence floor, ledger replay) holds. Deploys go through
 # the dotfiles version pin, so a red run here flags a broken main before a
 # pin bump ships it to the fleet.
+#
+# check-attribution.sh gates AI attribution trailers and "Generated with"
+# lines in commit messages and PR descriptions; see that script for why.
 name: CI
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -24,3 +29,39 @@ jobs:
           git fetch -q --depth 1 "${GITHUB_SERVER_URL/https:\/\//https:\/\/x-access-token:${TOKEN}@}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
           git checkout -q FETCH_HEAD
       - run: python3 -m unittest discover -s tests -v
+
+  attribution:
+    runs-on: python
+    steps:
+      # Same manual-checkout constraint as the test job, but here we need
+      # full history plus the PR base ref (when there is one) so the range
+      # check has something to diff against.
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          url="${GITHUB_SERVER_URL/https:\/\//https:\/\/x-access-token:${TOKEN}@}/${GITHUB_REPOSITORY}.git"
+          git init -q .
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch -q "$url" \
+              "$GITHUB_SHA:refs/heads/pr-head" \
+              "${{ github.event.pull_request.base.ref }}:refs/heads/pr-base"
+            git checkout -q pr-head
+          else
+            git fetch -q "$url" "$GITHUB_SHA"
+            git checkout -q FETCH_HEAD
+          fi
+      - name: Check commit messages
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ./check-attribution.sh commits pr-base..pr-head
+          else
+            ./check-attribution.sh commits -1
+          fi
+      - name: Check PR description
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > /tmp/pr-body.txt
+          ./check-attribution.sh body /tmp/pr-body.txt
