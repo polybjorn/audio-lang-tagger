@@ -4,8 +4,11 @@
 # the dotfiles version pin, so a red run here flags a broken main before a
 # pin bump ships it to the fleet.
 #
-# check-attribution.sh gates AI attribution trailers and "Generated with"
-# lines in commit messages and PR descriptions; see that script for why.
+# check-attribution.sh gates AI attribution trailers/lines in commit messages
+# and PR descriptions. CLAUDE.md says not to add these; an agent has followed
+# a conflicting session-level instruction and added them anyway more than
+# once regardless. Also enforced by memory alone until this, and memory
+# alone did not hold.
 name: CI
 
 on:
@@ -62,7 +65,7 @@ jobs:
             # A push carries the range it added; read that, not just the tip.
             # On main the tip is a merge commit, which carries none of the
             # trailers its parents do, so `-1` reported success on a push that
-            # had just landed one.
+            # had just landed one (polybjorn-en, 2026-09-13).
             #
             # Fallbacks, narrowest first: $before is missing (a runner that
             # does not hand it over), zeroed (first push to the branch) or no
@@ -88,3 +91,92 @@ jobs:
         run: |
           printf '%s' "$PR_BODY" > /tmp/pr-body.txt
           ./check-attribution.sh body /tmp/pr-body.txt
+
+  # Liveness for the branch sweep in delete-merged-branch.yml. That sweep is the
+  # backstop for a merge whose delete event never arrived, and it has the same
+  # blind spot one layer up: if its timer stops firing, branches pile up in
+  # exactly the same silence, because the absence of a run looks identical to
+  # nothing to do.
+  #
+  # It lives here rather than on a schedule of its own because a watchdog on its
+  # own timer needs its own watchdog. Every merge pushes to main, so this fires
+  # exactly when a branch would just have been left behind, and it costs no
+  # runner slot of its own. rovar-no reaches the same arrangement through a
+  # merge-audit workflow it already had; this repo has no npm and no second
+  # daily job, so ci.yml is the one that runs anyway.
+  sweep-freshness:
+    # Never on a pull_request: the thing it watches is a property of main, and a
+    # PR going red for an infrastructure fault it did not cause is how a gate
+    # gets ignored. workflow_dispatch is allowed so it can be run by hand.
+    if: github.event_name != 'pull_request'
+    runs-on: python
+    steps:
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git init -q .
+          git fetch -q --depth 1 "${GITHUB_SERVER_URL/https:\/\//https:\/\/x-access-token:${TOKEN}@}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q FETCH_HEAD
+
+      # Lengths only, and before the work rather than after. The values must
+      # never reach a log, which is readable by anyone who can read the repo.
+      # A job that cannot reach the API should say so in its first seconds
+      # rather than looking like a clean check, which is exactly the failure
+      # mode this job exists to remove.
+      #
+      # FORGE_PR_TOKEN is an Actions secret at the user scope of the repo owner.
+      # MEASURED on this job's first run on main (task 2185, 2026-09-16): it
+      # resolves here too, 40 characters, so this repo joins nixfleet,
+      # lokalverket-no, rovar-no and polybjorn-en. The same run settled the
+      # question that actually matters - the automatic token read the Actions
+      # listing on its own and the fallback below was never reached. Keep the
+      # fallback anyway: it costs nothing on the path that works, and the run
+      # that needs it is the one where something has already changed.
+      - name: Which tokens are available
+        env:
+          AUTO: ${{ github.token }}
+          PR_TOKEN: ${{ secrets.FORGE_PR_TOKEN }}
+        run: |
+          set -u
+          echo "github.token:    ${#AUTO} characters"
+          echo "FORGE_PR_TOKEN:  ${#PR_TOKEN} characters"
+
+      - name: The branch sweep is still running
+        env:
+          API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
+          AUTO: ${{ github.token }}
+          PR_TOKEN: ${{ secrets.FORGE_PR_TOKEN }}
+        run: |
+          set -u
+          # Prefer the automatic token: fewer dependencies, and it is the one
+          # that is always there. Confirmed sufficient here on 2026-09-16 -
+          # rovar-no needs FORGE_PR_TOKEN for the same listing and this repo
+          # does not, which is why this order is a preference and not a
+          # fallback chain to be simplified away. If the automatic one is ever
+          # refused the script exits 2 and this retries rather than reporting a
+          # missing sweep - "could not tell" and "not running" are different
+          # facts.
+          #
+          # `|| status=$?` rather than an `if`: after an untaken if-branch bash
+          # resets $? to 0, so reading the status after `fi` would turn a real
+          # exit 1 into a fallback attempt and possibly a pass. Measured, not
+          # assumed - `if (exit 1); then :; fi; echo $?` prints 0.
+          status=0
+          TOKEN="$AUTO" ./check-sweep-freshness.py || status=$?
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          if [ "$status" -eq 1 ]; then
+            exit 1
+          fi
+          if [ -z "${PR_TOKEN:-}" ]; then
+            echo "the automatic token could not read the Actions listing and" >&2
+            echo "FORGE_PR_TOKEN is not visible to this repo, so the sweep's" >&2
+            echo "liveness cannot be checked at all. It is a user-scope Actions" >&2
+            echo "secret on the repo owner; a repo-level secret of the same name" >&2
+            echo "would shadow it." >&2
+            exit "$status"
+          fi
+          echo "the automatic token was refused; retrying with FORGE_PR_TOKEN" >&2
+          TOKEN="$PR_TOKEN" ./check-sweep-freshness.py

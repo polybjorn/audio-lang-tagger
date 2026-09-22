@@ -1,0 +1,297 @@
+# Deletes the head branch when a pull request merges. The forge-native way to
+# do this is the repo setting default_delete_branch_after_merge, which is
+# admin-only and was never set; this is the same job as a file in the repo,
+# where it can be read and changed without admin rights.
+#
+# Only branches under herd/ are touched, and only when the PR actually merged.
+# A closed-unmerged PR, anyone else's branch and main are all left alone.
+#
+# EVERYTHING HERE HAPPENS OVER THE GIT TRANSPORT, because the forge's database
+# is the surface that lies and git is the one every clone actually uses. The
+# first version of this file (#8) asked the API to delete and then trusted the
+# status it got back. Two separate faults make that worthless, and they land on
+# the same end state - a branch present on every git-reading surface and absent
+# from `GET /branches`, the one surface that reads the branch table:
+#
+#   A. The database deletion lands and the git ref write does not. The DELETE
+#      answers 2xx while `refs/heads/<branch>` never moves. nixfleet #172,
+#      measured on bjorn/lokalverket-no. A job that asks the API whether the
+#      branch is gone is asking the party that was already fooled - which is
+#      how rovar-no's #17-era job logged `deleted` over a live ref.
+#
+#   B. Both deletions land, and then the forge puts the ref back. Read on the
+#      pi-rovar host on 2026-09-15 (rovar-no #42, nixfleet #194): the reflog
+#      entry for the restore has `0000000...` as its old sha, so the delete
+#      really took, and the writer is the forge's own `Gitea <gitea@fake.local>`
+#      with no `git-receive-pack` in the HTTP log for that window. The branch
+#      table deletion is not undone, which is how B arrives at A's end state.
+#
+# Both are answered by the same design. Ask git, not the API. Then, if the ref
+# is there, DELETE IT AGAIN rather than reporting a failure: in B nothing is
+# lost and nothing is wrong except the forge's timing.
+#
+# CONVERGENCE, NOT ONE SHOT, and that half was learned the expensive way. The
+# restore does not land at a fixed offset - rovar-no measured it 1.775 s after
+# the delete on one merge and 0.069 s before the push even printed `- [deleted]`
+# on another - so no arrangement of checks can be made into a guarantee. The
+# first version to detect B correctly went red on two of its first four merges,
+# for branches nobody had lost. A watchdog that cries wolf on half its runs gets
+# muted, and a muted watchdog hides the next real fault. So: delete, wait, ask
+# git, delete again. Red is reserved for a ref that survives four attempts.
+#
+# `git push --delete` is also the only removal path with a clean record here,
+# and it treats an already-gone ref benignly (a warning and exit 0) where the
+# API answers 500 with an empty message, not 404 - which is the other bug #8
+# had, since its handler keyed the already-gone case on 404 and re-raised
+# everything else. Ticking the merge dialog's own delete checkbox turned that
+# job red on a success.
+#
+# Ported from bjorn/rovar-no's version (its #38/#40/#45), with two changes for
+# this repo: the runner label is `python` (python:3.12) rather than `docker`,
+# and the API fallback is stdlib `urllib` rather than `curl`, which is not
+# something this repo can verify is in that image. git is - ci.yml's manual
+# checkout has been using it since #2.
+#
+# Ported since, as the second job below (#16): rovar-no's scheduled sweep, the
+# backstop for merges that produce no delete run at all. Its liveness check
+# hangs off a `merge-audit` workflow and npm scripts rovar-no has and this repo
+# does not, so that half was rebuilt here as check-sweep-freshness.py, run from
+# ci.yml on every push to main.
+name: Delete merged branch
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    # 05:29 daily, off the hour and clear of the slots this fleet already uses:
+    # 04:17 polybjorn-en, 04:37 rovar-no deps-update, 04:41 media-tools, 05:13
+    # rovar-no merge-audit, 06:00 Wed link-check. Capacity is one runner across
+    # seven repos, so these are a real queue rather than a courtesy.
+    - cron: '29 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  delete:
+    # The whole guard is here rather than in the script: a job that does not
+    # run is clearer in the run list than a job that runs and decides to do
+    # nothing.
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'herd/')
+    runs-on: python
+    timeout-minutes: 5
+    steps:
+      # No checkout, but not no repository: see the `git init` in the script.
+      # ls-remote genuinely needs neither, the delete push needs the second.
+      - name: Delete the head branch
+        env:
+          TOKEN: ${{ github.token }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+          API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -uo pipefail
+          # Same token-in-URL form ci.yml's manual checkout uses. Nothing here
+          # prints a command line, and git's own errors do not echo the URL.
+          remote="${SERVER/https:\/\//https:\/\/x-access-token:${TOKEN}@}/${REPO}.git"
+          ref="refs/heads/$BRANCH"
+
+          # `git push` has to run from inside a repository even when the remote
+          # is a full URL and the push only deletes a ref: it reads local config
+          # and refs before it ever contacts the remote. rovar-no #39 hit that -
+          # "fatal: not a git repository" - and every delete there went down the
+          # API fallback, the one path that cannot be trusted. An empty `git
+          # init` is enough, since a delete pushes no objects; the repository
+          # exists only to give git a place to stand.
+          git init -q /tmp/delete-repo
+          cd /tmp/delete-repo
+
+          # The only question this job ever asks, and it asks git.
+          present() { [ -n "$(git ls-remote --heads "$remote" "$ref")" ]; }
+
+          if ! present; then
+            # The merge dialog's own checkbox, or a manual sweep, got here
+            # first. That is the desired end state, not a failure.
+            echo "$BRANCH is already gone"
+            exit 0
+          fi
+
+          attempt=0
+          while :; do
+            attempt=$((attempt + 1))
+
+            if ! git push "$remote" --delete "$ref"; then
+              # The fallback exists for the case this repo cannot check from
+              # outside a runner: whether the automatic `github.token` may
+              # delete refs over git. Its status is logged and nothing branches
+              # on it - that is the #172 finding. The verification below is the
+              # same whichever path removed the ref.
+              echo "git push --delete was refused, falling back to the API" >&2
+              python3 - <<'PY' >&2
+          import os, urllib.parse, urllib.request, urllib.error
+
+          url = f"{os.environ['API']}/branches/{urllib.parse.quote(os.environ['BRANCH'], safe='')}"
+          req = urllib.request.Request(url, method="DELETE")
+          req.add_header("Authorization", f"token {os.environ['TOKEN']}")
+          try:
+              with urllib.request.urlopen(req) as r:
+                  print(f"API DELETE answered {r.status}")
+          except urllib.error.HTTPError as e:
+              print(f"API DELETE answered {e.code}")
+          except urllib.error.URLError as e:
+              print(f"API DELETE could not connect: {e.reason}")
+          PY
+            fi
+
+            # Ask git, and ask it late enough that a restore racing the
+            # confirmation has already landed. Five seconds covers both
+            # measurements in the header with room to spare.
+            sleep 5
+            present || break
+
+            echo "attempt $attempt: $BRANCH is back 5s after a delete git accepted" >&2
+            if [ "$attempt" -ge 4 ]; then
+              echo "$BRANCH SURVIVED 4 delete attempts (still on the remote per git)" >&2
+              exit 1
+            fi
+          done
+
+          # One last look after a longer settle. Still not a guarantee: a
+          # rovar-no specimen came back after two minutes, and nothing inside a
+          # job can wait that out. What catches that is the sweep below, on its
+          # own schedule, where a restore that outlives this job is just another
+          # merged branch still sitting on the remote.
+          sleep 10
+          if present; then
+            echo "$BRANCH came back after the delete had settled ($attempt attempt(s))" >&2
+            exit 1
+          fi
+
+          # The attempt count is the point of this line, not decoration: a run
+          # that needed three attempts is a different day from one that needed
+          # one.
+          echo "deleted $BRANCH ($attempt attempt(s))"
+
+  # THE BACKSTOP, AND THE REASON IT IS A SECOND SHAPE RATHER THAN A BETTER
+  # VERSION OF THE JOB ABOVE. The delete job runs on `pull_request: closed`,
+  # which covers the normal case and nothing else. An event-driven cleanup
+  # cannot fail loudly when the event never arrives: a dropped event leaves the
+  # branch behind forever, and the absence of a run is indistinguishable from
+  # nothing to do. polybjorn-en's #70 merged and produced no delete run at all
+  # while its #71 did, same repo and same forge, which is what this exists for.
+  # A PR closed while the runner was down, a branch merged from the Mac and a
+  # job cancelled mid-flight land in the same hole, as does a ref restored after
+  # the job has exited - one rovar-no specimen came back after two minutes,
+  # which nothing inside a five-minute job can wait out.
+  #
+  # Alongside the delete job, not instead of it. That one is what makes the
+  # common case immediate; this only catches what it missed.
+  #
+  # THE SAFETY CONDITION IS ANCESTRY, NOT THE NAME. A branch is deleted only
+  # when git says main already contains it. Deleting on the herd/ prefix alone
+  # would eventually eat somebody's in-progress work: the prefix decides WHOSE
+  # branches to consider, never whether one is finished.
+  #
+  # Liveness is checked, because if this timer stops firing the branches pile up
+  # in the same silence one layer up. ci.yml runs ./check-sweep-freshness.py on
+  # every push to main and goes red when no sweep has succeeded in 48 hours. It
+  # needs no schedule of its own that way, which matters because a watchdog on
+  # its own timer needs its own watchdog.
+  sweep:
+    # Never on a merge. The delete job above already handles that, and a sweep
+    # racing it would be two jobs deleting the same ref. This also means every
+    # merge files a SKIPPED `sweep` task - check-sweep-freshness.py refuses to
+    # count those as liveness, or merge traffic alone would keep it green.
+    if: github.event_name != 'pull_request'
+    runs-on: python
+    timeout-minutes: 10
+    steps:
+      # ANCESTRY COMES FROM GIT, NOT FROM THE COMPARE API. Forgejo's compare
+      # path runs a pulls-unit permission lookup, and the automatic
+      # `github.token` is the actions system user, which is no collaborator: it
+      # answers 404 `Can't read pulls or can't read UnitTypeCode`. That token
+      # reads and writes CODE fine, which is all this needs.
+      #
+      # `merge-base --is-ancestor` is the honest form of the question anyway.
+      # `--bare --filter=blob:none` keeps it cheap: commits and trees with no
+      # file contents, because the question is about the commit graph and never
+      # about file content.
+      #
+      # The clone also gives the delete push a repository to run from, which is
+      # the thing the delete job above needs its `git init` for.
+      - name: Find merged herd/ branches
+        env:
+          TOKEN: ${{ github.token }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git clone -q --bare --filter=blob:none \
+            "${SERVER/https:\/\//https:\/\/x-access-token:${TOKEN}@}/${REPO}.git" /tmp/sweep-repo
+          cd /tmp/sweep-repo
+
+          total=0
+          : > /tmp/merged.txt
+          # `**`, not `*`. A single star in a for-each-ref pattern does not
+          # match across a slash, so `refs/heads/herd/*` lists `herd/flat` and
+          # silently skips `herd/nested/deep` - measured on git 2.54.0 against a
+          # seeded repo holding both. Skipped, not reported: the branch is not
+          # listed, so it never reaches the `keep` line either, and the sweep
+          # looks like it had nothing to do. The delete job above guards on
+          # startsWith(head.ref, 'herd/'), which does match nested names, so the
+          # two halves would disagree on scope in exactly the case the backstop
+          # exists for. `ls-remote` does NOT share this behaviour, which is why
+          # the verification loop below is unaffected.
+          for b in $(git for-each-ref --format='%(refname:short)' 'refs/heads/herd/**'); do
+            total=$((total + 1))
+            if git merge-base --is-ancestor "$b" main; then
+              printf '%s\n' "$b" >> /tmp/merged.txt
+            else
+              echo "keep   $b (not an ancestor of main)"
+            fi
+          done
+          echo "$total candidate branch(es) under herd/, $(wc -l < /tmp/merged.txt) merged into main"
+
+      # One push for all of them rather than one per branch: git reports each
+      # ref's outcome separately, so nothing is lost by batching. Verification
+      # is still per branch, because a push reporting success is exactly the
+      # claim nixfleet #172 established is worthless.
+      - name: Delete them
+        run: |
+          set -uo pipefail
+          cd /tmp/sweep-repo
+          if [ ! -s /tmp/merged.txt ]; then
+            echo "swept 0, failed 0"
+            exit 0
+          fi
+
+          refs=()
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            refs+=("refs/heads/$name")
+          done < /tmp/merged.txt
+
+          # NOT fatal on a refused push: it must still be followed by the
+          # per-branch verification below, which is what turns "the push said
+          # something" into a real answer either way.
+          git push origin --delete "${refs[@]}" || \
+            echo "the delete push reported failure; verifying each branch anyway" >&2
+
+          deleted=0
+          failed=0
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            if [ -n "$(git ls-remote --heads origin "refs/heads/$name")" ]; then
+              echo "$name SURVIVED the delete (still on the remote per git)" >&2
+              failed=$((failed + 1))
+            else
+              echo "delete $name"
+              deleted=$((deleted + 1))
+            fi
+          done < /tmp/merged.txt
+
+          # Always a summary, including the nothing-to-do case: a run that
+          # prints nothing is indistinguishable from one that did not happen.
+          echo "swept $deleted, failed $failed"
+          [ "$failed" -eq 0 ]
