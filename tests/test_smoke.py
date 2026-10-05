@@ -221,7 +221,7 @@ class CoherenceFloor(unittest.TestCase):
 
 class AutoGate(unittest.TestCase):
     """auto_gate decides what --auto writes without asking, so every gate is
-    pinned at the value the README and the docstring publish."""
+    pinned at the value docs/how-it-decides.md and the docstring publish."""
 
     @classmethod
     def setUpClass(cls):
