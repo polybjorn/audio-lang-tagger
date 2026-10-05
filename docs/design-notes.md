@@ -112,7 +112,10 @@ threshold was calibrated against. A larger model reads differently and the
 gates should be re-checked before it is trusted with `--auto`.
 
 - Transcription runs 10.5-15x realtime end to end, including the ffmpeg
-  extract. `--realtime-factor` defaults to 12, the middle of that range.
+  extract. On the 24-core Core Ultra 7 270K Plus that replaced it, at the
+  default 2 jobs x 12 threads, it runs 19-33x (six 6-12 min shorts, twice,
+  package under 80 C), dialogue at the low end. `--realtime-factor` defaults
+  to 20, the conservative end of that range.
 - A cold scan takes 34s; warm from the cache it is 1s, and the first card
   arrives in 0.5s. Cache keys are path plus mtime plus track, so a retagged or
   replaced file can never be served a stale entry.

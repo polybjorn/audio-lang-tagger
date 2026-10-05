@@ -126,7 +126,8 @@ cards.
 
 Scans run --jobs at a time (default 2, at cpu_count/jobs whisper threads each).
 Benchmarked on a 6-core box that is only 1.28x one job, because whisper
-already parallelises internally, so raising it further buys nothing. Cards
+already parallelises internally, and on a 24-core one 4 jobs beat 2 by only
+8% while slowing every track, so raising it further buys little. Cards
 therefore arrive as scans finish rather than in queue order, which is why the
 counter is a running tally.
 
@@ -217,7 +218,7 @@ import threading
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-__version__ = "1.8.1"
+__version__ = "1.8.2"
 
 # ── Runtime configuration ───────────────────────────────────────────────────
 # Every path below is resolved by configure() before any work starts, from
@@ -325,19 +326,20 @@ IGNORE_STEMS = {"sample", "trailer"}
 IGNORE_EXTRA = []       # user patterns from --ignore / IGNORE
 USE_IGNORE = True       # --no-ignore turns the whole filter off
 IGNORED_COUNT = 0       # what the current run's sweep left out, for reporting
-# Measured on a 6-core Alder Lake box (base model, CPU backend): transcription
-# alone runs 16-21x realtime, but end-to-end with the ffmpeg extract it is
-# 10.5-15x (music-heavy tracks sit at the low end, since failed decodes retry
-# through the temperature fallback). 12 is the conservative middle and drives
-# both the whole-track budget and the 'f' estimate. Hardware-calibrated, so
-# --realtime-factor re-tunes it for a slower or faster host without touching
+# Measured on a 24-core Core Ultra 7 270K Plus (base model, CPU backend) at
+# the default 2 jobs x 12 threads, end-to-end with the ffmpeg extract: 19-33x
+# realtime over six 6-12 min shorts, twice. Dialogue-heavy tracks sit at the
+# low end (19-24x), since whisper's cost follows the words it emits. 20 is the
+# conservative end and drives both the whole-track budget and the 'f'
+# estimate. The 6-core Alder Lake this was first tuned on ran 10.5-15x, so a
+# smaller host wants --realtime-factor, which re-tunes this without touching
 # any of the gates.
-WHISPER_REALTIME = 12
+WHISPER_REALTIME = 20
 # A track whose whole-track pass fits this much wall-clock is scanned whole
 # instead of sampled - conclusive first card, no 'd' press. Runs in the
 # prefetch thread, so only the first card of a run waits on it.
 SCAN_BUDGET_SECONDS = 60
-FULL_SCAN_MAX_SECONDS = SCAN_BUDGET_SECONDS * WHISPER_REALTIME  # 12 min
+FULL_SCAN_MAX_SECONDS = SCAN_BUDGET_SECONDS * WHISPER_REALTIME  # 20 min
 # Whisper reads language from the FIRST 30s of whatever audio it is handed and
 # nothing else, so a cartoon that opens on music detects at 0.4-0.6 however
 # unambiguous the rest of the track is. A whole-track transcript knows where
@@ -387,6 +389,13 @@ INSTANCE_WARN_PAUSE = 3
 #   6 jobs x 1 thread  102 files/h
 # Only 1.28x, because whisper already parallelises internally and the work is
 # memory-bandwidth bound rather than core-starved. Not worth oversubscribing.
+# On the 24-core 270K Plus (8 P + 16 E cores) over six 6-12 min shorts:
+#   1 job x 24 threads  66 files/h   (one whisper spanning P and E cores)
+#   2 jobs x 12 threads 322-333 files/h  <- default, fastest per track
+#   3 jobs x 8 threads  283 files/h
+#   4 jobs x 6 threads  360 files/h  (+8%, but each track 14-22x, not 19-33x)
+# 2 stays the default: per-track speed is what the whole-track budget and the
+# first card wait on, and 4 jobs buys little aggregate for it.
 SCAN_JOBS = 2
 WHISPER_THREADS = 3
 

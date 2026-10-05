@@ -237,7 +237,7 @@ wins over the one config management writes.
 | `--queue-file PATH` | `QUEUE_FILE` | `untagged_audio.json` in the state dir |
 | `--model PATH` | `MODEL` | first existing of `~/.local/share/whisper/ggml-base.bin`, `/var/lib/whisper/ggml-base.bin`, `/usr/share/whisper.cpp/ggml-base.bin`, `/usr/local/share/whisper.cpp/ggml-base.bin` |
 | `--whisper-bin PATH` | `WHISPER_BIN` | `whisper-cli` / `whisper-cpp` / `whisper` on PATH |
-| `--realtime-factor N` | `REALTIME` | `12` |
+| `--realtime-factor N` | `REALTIME` | `20` |
 | `--sonarr-config PATH` | `SONARR_CONFIG` | `/var/lib/sonarr/config.xml` |
 | `--radarr-config PATH` | `RADARR_CONFIG` | `/var/lib/radarr/config.xml` |
 | `--ignore PATTERN` (repeatable) | `IGNORE` (`:`-separated) | trailers, samples, extras folders |
@@ -247,8 +247,8 @@ wins over the one config management writes.
 
 `--realtime-factor` is how many times realtime this machine transcribes,
 end-to-end including the ffmpeg extract. It sets which tracks are short enough
-to scan whole and what `f` estimates, nothing else; the default of 12 is
-measured, not guessed ([design notes][notes]). Example config:
+to scan whole and what `f` estimates, nothing else; the default of 20 is
+measured on a 24-core CPU, not guessed ([design notes][notes]). Example config:
 [`audio-lang-tagger.conf.example`](audio-lang-tagger.conf.example).
 
 </details>
@@ -311,7 +311,8 @@ for that - the one setting they have to agree on.
 `--jobs` scans run at once, at `cpu_count / jobs` whisper threads each. On a
 6-core box 2 jobs beat 1/3/6 and was still only 1.28x one job: whisper already
 parallelises internally and the work is memory-bandwidth bound, so raising it
-buys nothing.
+buys nothing. On a 24-core hybrid CPU 4 jobs beat 2 by 8% in aggregate but
+slowed each track, and 1 job at 24 threads ran at a fifth of 2 jobs' rate.
 
 Two runs at once are survivable but not recommended: writes to the shared JSON
 files are read-modify-write under an `flock` so they merge rather than clobber,
