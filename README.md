@@ -37,7 +37,7 @@ mkdir -p ~/.local/share/whisper
 curl -L -o ~/.local/share/whisper/ggml-base.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 
-curl -O https://raw.githubusercontent.com/polybjorn/audio-lang-tagger/main/audio-lang-tagger.py
+curl -LO https://github.com/polybjorn/audio-lang-tagger/releases/latest/download/audio-lang-tagger.py
 chmod +x audio-lang-tagger.py
 ./audio-lang-tagger.py --list /path/to/your/video   # count untagged tracks, change nothing
 ./audio-lang-tagger.py /path/to/your/video          # tag, confirming each track
@@ -46,6 +46,21 @@ chmod +x audio-lang-tagger.py
 If anything is missing the tool says exactly what and how to install it, and
 `--show-config` prints every resolved path and connection. For your PATH:
 `install -m 755 audio-lang-tagger.py ~/.local/bin/`.
+
+That URL always serves the newest stable release, never a beta or an
+unreleased `main`. To update, download it again.
+
+### Testing a beta
+
+Betas are published as pre-releases, which `latest` skips. Fetch one by its tag
+from the [releases page](https://github.com/polybjorn/audio-lang-tagger/releases):
+
+```
+curl -LO https://github.com/polybjorn/audio-lang-tagger/releases/download/v1.9.0-beta.1/audio-lang-tagger.py
+```
+
+`--version` then prints the beta tag. Go back to stable with the `latest` URL
+above.
 
 ## Usage
 
