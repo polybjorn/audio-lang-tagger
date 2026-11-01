@@ -21,7 +21,7 @@ can work on the assumption that everything left is identified.
 
 ## Quick start
 
-Needs Python 3.8+ (nothing to `pip install`), whisper.cpp, ffmpeg and
+Needs Python 3.10+ (nothing to `pip install`), whisper.cpp, ffmpeg and
 mkvtoolnix. The script is one file:
 
 ```bash

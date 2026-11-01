@@ -10,4 +10,4 @@ Smoke coverage: the script imports and builds its parser, the formatters
 behave, the extras filter skips by convention, `--undo` reads the ledger
 correctly, and every `--auto` gate is pinned at the value
 [documented](how-it-decides.md#unattended-tagging). CI runs the same suite on
-every push; the GitHub workflow runs it on Python 3.8, 3.10, 3.12 and 3.13.
+every push; the GitHub workflow runs it on Python 3.10, 3.12 and 3.13.
