@@ -33,10 +33,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # checkout leaves the tag lightweight; fetch the annotated one so
-          # --notes-from-tag has a message to read.
-          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          awk -v h="## $GITHUB_REF_NAME" '
+            $0 == h { on = 1; next }
+            on && /^## / { exit }
+            on' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no section for $GITHUB_REF_NAME"
+            exit 1
+          fi
           pre=()
           case "$GITHUB_REF_NAME" in *-*) pre=(--prerelease) ;; esac
           gh release create "$GITHUB_REF_NAME" audio-lang-tagger.py \
-            --title "$GITHUB_REF_NAME" --verify-tag --notes-from-tag "${pre[@]}"
+            --title "$GITHUB_REF_NAME" --verify-tag --notes-file notes.md "${pre[@]}"

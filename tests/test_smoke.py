@@ -39,6 +39,23 @@ class EntrypointSmoke(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr.decode())
 
 
+class Changelog(unittest.TestCase):
+    """The release workflow publishes the CHANGELOG section for the tag as its
+    notes. Failing here, before the signed tags exist, saves re-cutting both
+    once the release job refuses."""
+
+    def test_current_version_has_notes(self):
+        heading = f"## v{load_module().__version__}"
+        lines = (SCRIPT.parent / "CHANGELOG.md").read_text().splitlines()
+        self.assertIn(heading, lines)
+        section = []
+        for line in lines[lines.index(heading) + 1:]:
+            if line.startswith("## "):
+                break
+            section.append(line)
+        self.assertTrue("".join(section).strip(), f"{heading} is empty")
+
+
 class Formatters(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

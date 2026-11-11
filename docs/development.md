@@ -10,7 +10,7 @@ Smoke coverage: the script imports and builds its parser, the formatters
 behave, the extras filter skips by convention, `--undo` reads the ledger
 correctly, and every `--auto` gate is pinned at the value
 [documented](how-it-decides.md#unattended-tagging). CI runs the same suite on
-every push; the GitHub workflow runs it on Python 3.11, 3.12 and 3.13.
+every push; the GitHub workflow runs it on Python 3.11, 3.12 and 3.15.
 
 ## Releases
 
@@ -22,6 +22,11 @@ nothing on `main` reaches users until it is tagged.
 The workflow fails, and publishes nothing, when the tag does not match
 `--version`. Bump `__version__` in `audio-lang-tagger.py` first, without the
 leading `v`.
+
+The release notes are the tag's `## vX.Y.Z` section of `CHANGELOG.md`, not the
+tag message. Add the section in the same commit as the version bump: the test
+suite fails while `__version__` has none, so CI stops the release before the
+tags are signed.
 
 A beta is the same signed `vX.Y.Z` / `vX.Y.Z-public` routine with a `-beta.N`
 suffix on the version: `__version__ = "1.9.0-beta.1"`, tagged
