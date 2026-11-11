@@ -252,12 +252,21 @@ class AutoGate(unittest.TestCase):
         self.assertEqual(self.gate(exp=None), "no arr metadata")
 
     def test_confusable_cluster_never_tags(self):
-        for iso1 in ("no", "nn", "da", "sv"):
+        for iso1 in ("nn", "da", "sv"):
             self.assertEqual(
                 self.gate(self.analysis(iso1=iso1),
                           exp=(self.mod.ISO1_TO_ISO2B[iso1], "Sonarr", 2019,
                                set())),
                 "ambiguous language cluster", iso1)
+
+    def test_norwegian_tags_on_the_same_gates_as_english(self):
+        heard = self.analysis(iso1="no", detections=[("no", 0.97), ("no", 0.96)])
+        self.assertIsNone(self.gate(heard, exp=("nor", "Sonarr", 2019, set())))
+        # The near-wordless shorts that read as "no" fail on their own.
+        self.assertEqual(self.gate(heard), "differs from arr language")
+        loop = dict(heard, chars=1332, words=385, unique=0.13)
+        self.assertEqual(self.gate(loop, exp=("nor", "Sonarr", 2019, set())),
+                         "no coherent transcript")
 
     def test_sampled_scan_needs_two_unanimous_windows(self):
         for dets in ([("en", 0.95)],

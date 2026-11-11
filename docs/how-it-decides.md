@@ -57,8 +57,8 @@ material needs different thresholds:
    knows it (`AUTO_MIN_YEAR`; older content is sparse-dialogue territory)
 5. **Genre** - not music or concert (`AUTO_EXCLUDE_GENRES`)
 6. **One audio track** - a single non-commentary track in the file
-7. **Unambiguous language** - outside the `no`/`nn`/`da`/`sv` cluster whisper
-   confuses (`AUTO_EXCLUDE_ISO1`)
+7. **Unambiguous language** - not `nn`, `da` or `sv`, which whisper confuses
+   with each other and with `no` (`AUTO_EXCLUDE_ISO1`)
 
 "No speech found" never auto-tags anything.
 

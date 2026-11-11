@@ -97,9 +97,13 @@ would be a real join key, but the tool does not read NFOs today.
   one above.
 - **A single non-commentary audio track** avoids the case where the detection
   is right about *a* track and wrong about *this* one.
-- **Outside the `no`/`nn`/`da`/`sv` cluster** is an admission: whisper confuses
-  those four often enough that agreement between it and the arr is not
-  independent evidence.
+- **Not `nn`, `da` or `sv`** is an admission: whisper confuses the Scandinavian
+  languages often enough that agreement between it and the arr is not
+  independent evidence. `no` was in the set until real speech was measured:
+  seven confirmed Norwegian episodes all read `no` at 0.96 or more, while the
+  group's false hits came from near-wordless shorts (an empty transcript read
+  as `nn` 0.91, repetition loops as `no` and `sv`) that the transcript and arr
+  gates stop on their own. The other three wait for speech to measure.
 - **`zxx` is checked more suspiciously than any language code**, in `--bulk`
   and on the card alike, because it claims absence. Twenty distinct words
   anywhere in the track is enough to hand the file back to the human, while

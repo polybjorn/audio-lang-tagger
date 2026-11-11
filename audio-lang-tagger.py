@@ -55,7 +55,7 @@ Year is 1940 or later, using the episode's own air year where Sonarr knows it
 rather than the series year, because an anthology's start year blocks
 everything and discriminates nothing. Genre is not music/concert. The file has
 a single non-commentary audio track, and the language is outside the
-no/nn/da/sv cluster whisper confuses. "No speech found" never auto-tags
+nn/da/sv group whisper confuses. "No speech found" never auto-tags
 anything.
 
 Every applied tag, auto and manual, is appended to lang_tagger_tags.tsv in the
@@ -218,7 +218,7 @@ import threading
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-__version__ = "1.8.2"
+__version__ = "1.9.0"
 
 # ── Runtime configuration ───────────────────────────────────────────────────
 # Every path below is resolved by configure() before any work starts, from
@@ -298,7 +298,12 @@ AUTO_LONG_MIN_DISTINCT = 100
 AUTO_LONG_MIN_UNIQUE = 0.20
 AUTO_MIN_YEAR = 1940       # pre-sound-era / sparse-dialogue zone prompts
 AUTO_EXCLUDE_GENRES = {"music", "concert"}
-AUTO_EXCLUDE_ISO1 = {"no", "nn", "da", "sv"}  # whisper flips within cluster
+# whisper flips between these on singing and near-wordless audio. "no" left
+# the set once real speech showed it holds: seven confirmed Norwegian episodes
+# all read "no" at 0.96 or more, and every no/nn/sv hit on other material
+# also failed the transcript and arr gates. Nothing has measured da, sv or nn
+# speech yet.
+AUTO_EXCLUDE_ISO1 = {"nn", "da", "sv"}
 # --bulk zxx safety net. zxx claims a track holds NO linguistic content, so the
 # bar for doubting that claim is deliberately far below the bar for auto-tagging
 # anything: the risk is one-sided (a wrong zxx is a real error, an extra prompt
