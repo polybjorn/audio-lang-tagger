@@ -665,7 +665,11 @@ def build_expected_map():
         if not isinstance(items, list):
             continue
         for item in items:
+            # The arrs store their root through a symlink (/mnt/storage ->
+            # /storage on the hypervisor) that the sweep does not walk, so both
+            # sides are compared resolved (media-tools#55).
             path = item.get("path", "")
+            path = os.path.realpath(path) if path else ""
             name = item.get("originalLanguage", {}).get("name", "").lower()
             code = ARR_LANG_NAME_TO_CODE.get(name)
             year = item.get("year") or None
@@ -720,10 +724,10 @@ def episode_year(filepath, series_path):
                 ep_path = (ep.get("episodeFile") or {}).get("path")
                 aired = ep.get("airDateUtc") or ""
                 if ep_path and len(aired) >= 4 and aired[:4].isdigit():
-                    table[ep_path] = int(aired[:4])
+                    table[os.path.realpath(ep_path)] = int(aired[:4])
         with _episode_years_lock:
             _episode_years[series_path] = table
-    return table.get(str(filepath))
+    return table.get(os.path.realpath(filepath))
 
 
 def expected_for(filepath, expected_map):
@@ -734,7 +738,7 @@ def expected_for(filepath, expected_map):
     no knowledge of where the year came from. The blocked-reason line prints the
     year it actually used, which is how you can tell the two apart.
     """
-    fpath = str(filepath)
+    fpath = os.path.realpath(filepath)
     for path, val in expected_map.items():
         if fpath == path or fpath.startswith(path.rstrip("/") + "/"):
             aired = episode_year(filepath, path)
