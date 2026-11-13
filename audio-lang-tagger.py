@@ -218,7 +218,7 @@ import threading
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-__version__ = "1.9.0"
+__version__ = "1.9.2"
 
 # ── Runtime configuration ───────────────────────────────────────────────────
 # Every path below is resolved by configure() before any work starts, from

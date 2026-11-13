@@ -2,7 +2,7 @@
 
 Each tag's section here becomes its GitHub release notes.
 
-## v1.9.1
+## v1.9.2
 
 - A file now finds its title's original language when Radarr or Sonarr store
   the library through a symlink the sweep does not follow, for example
