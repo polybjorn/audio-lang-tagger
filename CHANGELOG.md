@@ -2,6 +2,13 @@
 
 Each tag's section here becomes its GitHub release notes.
 
+## v1.9.1
+
+- A file now finds its title's original language when Radarr or Sonarr store
+  the library through a symlink the sweep does not follow, for example
+  `/mnt/storage` pointing at `/storage`. Before, no file matched, so `--auto`
+  never had the arr's corroboration and left every file to an interactive run.
+
 ## v1.9.0
 
 - Requires Python 3.11 or newer (was 3.8).
